@@ -99,6 +99,15 @@ public abstract class AbstractAnalysis<
             Store.FlowRule flowRule,
             boolean addToWorklistAgain);
 
+    /**
+     * Runs the analysis again within the block of {@code node} and returns the
+     * store at the location of {@code node}. If {@code before} is true, then
+     * the store immediately before the {@link Node} {@code node} is returned.
+     * Otherwise, the store after {@code node} is returned.
+     */
+    protected abstract S runAnalysisFor(
+            Node node, boolean before, TransferInput<V, S> transferInput);
+
     @Override
     /** Is the analysis currently running? */
     public boolean isRunning() {

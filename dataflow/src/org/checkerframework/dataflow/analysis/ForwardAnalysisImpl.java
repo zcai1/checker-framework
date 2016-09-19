@@ -464,4 +464,72 @@ public class ForwardAnalysisImpl<
         }
         return result;
     }
+
+    @Override
+    protected S runAnalysisFor(Node node, boolean before, TransferInput<V, S> transferInput) {
+        Block block = node.getBlock();
+        Node oldCurrentNode = currentNode;
+
+        // TODO: why if analysis is running, then the Store of passing node is analysis.currentInput.getRegularStore()?
+        if (isRunning) {
+            return currentInput.getRegularStore();
+        }
+
+        isRunning = true;
+        try {
+            switch (block.getType()) {
+                case REGULAR_BLOCK:
+                    {
+                        RegularBlock rb = (RegularBlock) block;
+
+                        // Apply transfer function to contents until we found the node
+                        // we
+                        // are looking for.
+                        TransferInput<V, S> store = transferInput;
+                        TransferResult<V, S> transferResult = null;
+                        for (Node n : rb.getContents()) {
+                            currentNode = n;
+                            if (n == node && before) {
+                                return store.getRegularStore();
+                            }
+                            transferResult = callTransferFunction(n, store);
+                            if (n == node) {
+                                return transferResult.getRegularStore();
+                            }
+                            store = new TransferInput<>(n, this, transferResult);
+                        }
+                        // This point should never be reached. If the block of 'node' is
+                        // 'block', then 'node' must be part of the contents of 'block'.
+                        assert false;
+                        return null;
+                    }
+
+                case EXCEPTION_BLOCK:
+                    {
+                        ExceptionBlock eb = (ExceptionBlock) block;
+
+                        // apply transfer function to content
+                        assert eb.getNode() == node;
+                        if (before) {
+                            return transferInput.getRegularStore();
+                        }
+
+                        currentNode = node;
+                        TransferResult<V, S> transferResult =
+                                callTransferFunction(node, transferInput);
+                        return transferResult.getRegularStore();
+                    }
+
+                default:
+                    // Only regular blocks and exceptional blocks can hold nodes.
+                    assert false;
+                    break;
+            }
+
+            return null;
+        } finally {
+            currentNode = oldCurrentNode;
+            isRunning = false;
+        }
+    }
 }
