@@ -229,16 +229,16 @@ public abstract class AbstractAnalysis<
      * Call the transfer function for node {@code node}, and set that node as
      * current node first.
      */
-    protected TransferResult<V, S> callTransferFunction(Node node, TransferInput<V, S> input) {
+    protected TransferResult<V, S> callTransferFunction(Node node, TransferInput<V, S> store) {
         if (node.isLValue()) {
             // TODO: should the default behavior be to return either a regular
             // transfer result or a conditional transfer result (depending on
             // store.hasTwoStores()), or is the following correct?
-            return new RegularTransferResult<V, S>(null, input.getRegularStore());
+            return new RegularTransferResult<V, S>(null, store.getRegularStore());
         }
-        input.node = node;
+        store.node = node;
         currentNode = node;
-        TransferResult<V, S> transferResult = node.accept(transferFunction, input);
+        TransferResult<V, S> transferResult = node.accept(transferFunction, store);
         currentNode = null;
         // This part should implement in ForwardAnalysis
         //        if (node instanceof ReturnNode) {
