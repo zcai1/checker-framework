@@ -48,12 +48,6 @@ public class ForwardAnalysisImpl<
                 T extends ForwardTransferFunction<V, S>>
         extends AbstractAnalysis<V, S, T> implements ForwardAnalysis<V, S, T> {
 
-    //    /** The associated processing environment */
-    //    protected final ProcessingEnvironment env;
-    //
-    //    /** Instance of the types utility. */
-    //    protected final Types types;
-
     /**
      * Then stores before every basic block (assumed to be 'no information' if
      * not present).

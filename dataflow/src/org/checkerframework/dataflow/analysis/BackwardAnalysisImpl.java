@@ -184,7 +184,6 @@ public class BackwardAnalysisImpl<
         SpecialBlock regularExitBlock = cfg.getRegularExitBlock();
         SpecialBlock exceptionExitBlock = cfg.getExceptionalExitBlock();
 
-        // TODO: this is a tricky assertion! reason see the comment below.
         assert worklist.depthFirstOrder.get(regularExitBlock) != null
                         || worklist.depthFirstOrder.get(exceptionExitBlock) != null
                 : "regularExitBlock and exceptionExitBlock should never both be null at the same time.";
@@ -195,19 +194,16 @@ public class BackwardAnalysisImpl<
         S normalInitialStore = transferFunction.initialNormalExitStore(underlyingAST, returnNodes);
         S exceptionalInitialStore = transferFunction.initialExceptionalExitStore(underlyingAST);
 
-        // TODO: this is tricky if-condition!
-        // exceptionExitBlock and regularExitBlock will always be non-null account to the implementation
-        // in CFGBuilder#CFGTranslationPhaseTwo#process() will always create these two exit blocks on a CFG no
-        // matter this CFG whether would has these exit blocks according to the underlying AST.
+        // exceptionExitBlock and regularExitBlock will always be non-null, as CFGBuilder#CFGTranslationPhaseTwo#process()
+        // will always create these two exit blocks on a CFG no matter this CFG whether would has these exit blocks according to the underlying AST
         // Here the workaround is using the inner protected Map in Worklist to decide whether a given cfg really
-        // has a regularExitBlock and/or an exceptionExitBlockå
+        // has a regularExitBlock and/or an exceptionExitBlock
         if (worklist.depthFirstOrder.get(regularExitBlock) != null) {
             worklist.add(regularExitBlock);
             inputs.put(regularExitBlock, new TransferInput<>(null, this, normalInitialStore));
             outStores.put(regularExitBlock, normalInitialStore);
         }
 
-        // TODO: tricky code, same reason as above.
         if (worklist.depthFirstOrder.get(exceptionExitBlock) != null) {
             worklist.add(exceptionExitBlock);
             inputs.put(
@@ -233,21 +229,19 @@ public class BackwardAnalysisImpl<
     }
 
     protected void addStoreAfter(Block pred, Node node, S s, boolean addBlockToWorklist) {
+        // if Block {@code pred} is an ExceptionBlock,
+        // decide whether the block of passing node is an exceptional successor of Block @{code pred}
         if (pred instanceof ExceptionBlock
                 && (((ExceptionBlock) pred).getSuccessor() == null
                         || (node != null
                                 && ((ExceptionBlock) pred).getSuccessor().getId()
                                         != node.getBlock().getId()))) {
-            // TODO: implement an equalTo() in Block would be better
-            // if the block of current node is not the regular successor block of exception block's predecessor,
-            // then it must be the exceptional successor of it's predecessor. Then it's store propagate
-            // to the exceptionStore of it's predecessor
+            // if the block of passing node is an exceptional successor of Block @{code pred},
+            // propagating store to the {@code exceptionStores}
+
             // currently I don't track the label of an exceptional edge from Exception Block
-            // to it's exceptional successors in backward direction.
-            // All exception stores of exceptional successors of an Exception Block
-            // will merge to one exception store at Exception Block.
-            // Similiar to if-else branch, in backward direction, these will merge
-            // in backward direction no matter it from a else or if branch.
+            // to it's exceptional successors in backward direction, instead, all exception stores
+            // of exceptional successors of an Exception Block will merge to one exception store at the Exception Block
 
             ExceptionBlock ebPred = (ExceptionBlock) pred;
 

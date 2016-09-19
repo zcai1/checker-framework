@@ -245,12 +245,7 @@ public abstract class AbstractAnalysis<
         currentNode = node;
         TransferResult<V, S> transferResult = node.accept(transferFunction, store);
         currentNode = null;
-        // This part should implement in ForwardAnalysis
-        //        if (node instanceof ReturnNode) {
-        //            // save a copy of the store to later check if some property held at
-        //            // a given return statement
-        //            storesAtReturnStatements.put((ReturnNode) node, transferResult);
-        //        }
+
         if (node instanceof AssignmentNode) {
             // store the flow-refined value for effectively final local variables
             AssignmentNode assignment = (AssignmentNode) node;
