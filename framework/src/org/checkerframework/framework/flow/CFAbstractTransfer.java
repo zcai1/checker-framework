@@ -29,6 +29,7 @@ import org.checkerframework.dataflow.analysis.FlowExpressions.FieldAccess;
 import org.checkerframework.dataflow.analysis.FlowExpressions.LocalVariable;
 import org.checkerframework.dataflow.analysis.FlowExpressions.Receiver;
 import org.checkerframework.dataflow.analysis.FlowExpressions.ThisReference;
+import org.checkerframework.dataflow.analysis.ForwardTransferFunction;
 import org.checkerframework.dataflow.analysis.RegularTransferResult;
 import org.checkerframework.dataflow.analysis.TransferFunction;
 import org.checkerframework.dataflow.analysis.TransferInput;
@@ -99,7 +100,7 @@ public abstract class CFAbstractTransfer<
                 S extends CFAbstractStore<V, S>,
                 T extends CFAbstractTransfer<V, S, T>>
         extends AbstractNodeVisitor<TransferResult<V, S>, TransferInput<V, S>>
-        implements TransferFunction<V, S> {
+        implements ForwardTransferFunction<V, S> {
 
     /**
      * The analysis class this store belongs to.

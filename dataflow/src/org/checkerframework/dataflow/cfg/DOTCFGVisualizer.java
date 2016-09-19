@@ -49,6 +49,7 @@ public class DOTCFGVisualizer<
 
     protected String outdir;
     protected boolean verbose;
+    // TODO: This is checker-framework specific field, should be removed or have a better name
     protected String checkerName;
 
     protected StringBuilder sbDigraph;
@@ -253,8 +254,12 @@ public class DOTCFGVisualizer<
                     "Unexpected AST kind: " + ast.getKind() + " value: " + ast.toString());
             return null;
         }
-        outfile.append('-');
-        outfile.append(checkerName);
+
+        if (checkerName != null) {
+            outfile.append('-');
+            outfile.append(checkerName);
+        }
+
         outfile.append(".dot");
 
         // make path safe for Windows
@@ -467,7 +472,8 @@ public class DOTCFGVisualizer<
 
     @Override
     public void visualizeStoreKeyVal(String keyName, Object value) {
-        this.sbStore.append("  " + keyName + " = " + value + "\\n");
+        this.sbStore.append(
+                "  " + prepareString(keyName) + " = " + prepareString(value.toString()) + "\\n");
     }
 
     protected String escapeDoubleQuotes(final String str) {

@@ -1,7 +1,7 @@
 package org.checkerframework.qualframework.base.dataflow;
 
 import javax.lang.model.type.TypeMirror;
-import org.checkerframework.dataflow.analysis.Analysis;
+import org.checkerframework.dataflow.analysis.ForwardAnalysisImpl;
 import org.checkerframework.dataflow.cfg.node.Node;
 import org.checkerframework.framework.flow.CFAbstractAnalysis;
 import org.checkerframework.framework.flow.CFStore;
@@ -26,7 +26,8 @@ import org.checkerframework.qualframework.util.QualifierContext;
  * (like initialization) to the QualStore or QualValue will currently have no effect.
  *
  */
-public class QualAnalysis<Q> extends Analysis<QualValue<Q>, QualStore<Q>, QualTransfer<Q>> {
+public class QualAnalysis<Q>
+        extends ForwardAnalysisImpl<QualValue<Q>, QualStore<Q>, QualTransfer<Q>> {
 
     private CFAbstractAnalysis<CFValue, CFStore, CFTransfer> adapter;
     private final QualifierContext<Q> context;
@@ -34,7 +35,7 @@ public class QualAnalysis<Q> extends Analysis<QualValue<Q>, QualStore<Q>, QualTr
 
     public QualAnalysis(QualifierContext<Q> context) {
 
-        super(context.getProcessingEnvironment());
+        super();
         this.context = context;
         this.converter = context.getCheckerAdapter().getTypeMirrorConverter();
     }

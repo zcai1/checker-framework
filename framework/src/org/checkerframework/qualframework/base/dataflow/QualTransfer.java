@@ -1,6 +1,7 @@
 package org.checkerframework.qualframework.base.dataflow;
 
 import java.util.List;
+import org.checkerframework.dataflow.analysis.ForwardTransferFunction;
 import org.checkerframework.dataflow.analysis.TransferFunction;
 import org.checkerframework.dataflow.analysis.TransferInput;
 import org.checkerframework.dataflow.analysis.TransferResult;
@@ -82,7 +83,7 @@ import org.checkerframework.dataflow.cfg.node.WideningConversionNode;
  * method in CFTransfer.
  *
  */
-public class QualTransfer<Q> implements TransferFunction<QualValue<Q>, QualStore<Q>> {
+public class QualTransfer<Q> implements ForwardTransferFunction<QualValue<Q>, QualStore<Q>> {
 
     protected final QualAnalysis<Q> analysis;
     protected QualTransferAdapter<Q> adapter;
