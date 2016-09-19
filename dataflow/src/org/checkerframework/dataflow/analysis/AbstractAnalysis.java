@@ -10,16 +10,12 @@ import com.sun.source.tree.Tree;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import javax.lang.model.element.Element;
 import org.checkerframework.dataflow.cfg.ControlFlowGraph;
 import org.checkerframework.dataflow.cfg.block.Block;
-import org.checkerframework.dataflow.cfg.block.ExceptionBlock;
-import org.checkerframework.dataflow.cfg.block.RegularBlock;
 import org.checkerframework.dataflow.cfg.block.SpecialBlock;
 import org.checkerframework.dataflow.cfg.node.AssignmentNode;
 import org.checkerframework.dataflow.cfg.node.LocalVariableNode;
@@ -30,9 +26,9 @@ import org.checkerframework.javacutil.ElementUtils;
  * Common code base for BackwardAnalysis and ForwardAnalysis
  * @author charleszhuochen
  *
- * @param <V>
- * @param <S>
- * @param <T>
+ * @param <V> AbstractValue
+ * @param <S> Store
+ * @param <T> TransferFunction
  */
 public abstract class AbstractAnalysis<
                 V extends AbstractValue<V>, S extends Store<S>, T extends TransferFunction<V, S>>

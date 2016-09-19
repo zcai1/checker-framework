@@ -23,12 +23,6 @@ public class CFGProcessor extends BasicTypeProcessor {
 
     private CFGProcessResult result;
 
-    /**
-     *TODO: make this a public seperate class, to allow clients only get the generated CFG
-     * @param className
-     * @param methodName
-     * @param res
-     */
     protected CFGProcessor(String className, String methodName) {
         this.className = className;
         this.methodName = methodName;
