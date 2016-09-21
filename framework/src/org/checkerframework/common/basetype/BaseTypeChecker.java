@@ -694,4 +694,8 @@ public abstract class BaseTypeChecker extends SourceChecker implements BaseTypeC
             }
         }
     }
+
+    public boolean withCombineConstraints() {
+        return false;
+    }
 }
