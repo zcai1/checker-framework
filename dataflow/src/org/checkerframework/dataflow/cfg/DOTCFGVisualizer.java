@@ -21,6 +21,7 @@ import java.util.Set;
 import javax.lang.model.type.TypeMirror;
 import org.checkerframework.dataflow.analysis.AbstractValue;
 import org.checkerframework.dataflow.analysis.Analysis;
+import org.checkerframework.dataflow.analysis.Analysis.Direction;
 import org.checkerframework.dataflow.analysis.FlowExpressions;
 import org.checkerframework.dataflow.analysis.Store;
 import org.checkerframework.dataflow.analysis.TransferFunction;
@@ -362,51 +363,73 @@ public class DOTCFGVisualizer<
         assert analysis != null
                 : "analysis should be non-null when visualizing the transfer input of a block.";
 
-        TransferInput<A, S> input = analysis.getInput(bb);
+        visualizeBlockTransferInput(bb, analysis, true);
+        if (verbose) {
+            visualizeBlockTransferInput(bb, analysis, false);
+        }
+    }
+
+    /**
+     * visualize transfer input of given {@link Block}
+     * @param bb given block
+     * @param analysis corresponding analysis on this block
+     * @param before if true, visualize the transfer input before given Block,
+     *        otherwise visualize the transfer input after given Block
+     */
+    protected void visualizeBlockTransferInput(
+            Block bb, Analysis<A, S, T> analysis, boolean before) {
+        S regularStore = null;
+        S thenStore = null;
+        S elseStore = null;
+        boolean isTwoStores = false;
+
+        // first reset the sbStore
         this.sbStore.setLength(0);
+        String title = before ? "Before:" : "After:";
+        String seperator = "\\n~~~~~~~~~\\n";
+
+        Direction analysisDirection = analysis.getDirection();
+
+        if ((before && analysisDirection == Direction.FORWARD)
+                || (!before && analysisDirection == Direction.BACKWARD)) {
+            TransferInput<A, S> input = analysis.getInput(bb);
+            isTwoStores = input.containsTwoStores();
+            regularStore = input.getRegularStore();
+            thenStore = input.getThenStore();
+            elseStore = input.getElseStore();
+        } else if (!before && analysisDirection == Direction.FORWARD) {
+            isTwoStores = false;
+            regularStore = analysis.getResult().getStoreAfter(bb);
+        } else if (before && analysisDirection == Direction.BACKWARD) {
+            isTwoStores = false;
+            regularStore = analysis.getResult().getStoreBefore(bb);
+        } else {
+            assert false;
+        }
 
         // split input representation to two lines
-        this.sbStore.append("Before:");
-        S thenStore = input.getThenStore();
-        if (!input.containsTwoStores()) {
-            S regularStore = input.getRegularStore();
+        this.sbStore.append(title);
+
+        if (!isTwoStores) {
             this.sbStore.append('[');
             visualizeStore(regularStore);
             this.sbStore.append(']');
         } else {
-            S elseStore = input.getElseStore();
             this.sbStore.append("[then=");
             visualizeStore(thenStore);
             this.sbStore.append(", else=");
             visualizeStore(elseStore);
             this.sbStore.append("]");
         }
-        // separator
-        this.sbStore.append("\\n~~~~~~~~~\\n");
 
-        // the transfer input before this block is added before the block content
-        this.sbBlock.insert(0, this.sbStore);
-
-        if (verbose) {
-            Node lastNode;
-            switch (bb.getType()) {
-                case REGULAR_BLOCK:
-                    List<Node> blockContents = ((RegularBlock) bb).getContents();
-                    lastNode = blockContents.get(blockContents.size() - 1);
-                    break;
-                case EXCEPTION_BLOCK:
-                    lastNode = ((ExceptionBlock) bb).getNode();
-                    break;
-                default:
-                    lastNode = null;
-            }
-            if (lastNode != null) {
-                this.sbStore.setLength(0);
-                this.sbStore.append("\\n~~~~~~~~~\\n");
-                this.sbStore.append("After:");
-                visualizeStore(analysis.getResult().getStoreAfter(lastNode.getTree()));
-                this.sbBlock.append(this.sbStore);
-            }
+        // insert separator
+        if (before) {
+            this.sbStore.append(seperator);
+            // the transfer input before this block is added before the block content
+            this.sbBlock.insert(0, this.sbStore);
+        } else {
+            this.sbStore.insert(0, seperator);
+            this.sbBlock.append(this.sbStore);
         }
     }
 
@@ -516,5 +539,10 @@ public class DOTCFGVisualizer<
                     "Error creating methods.txt file in: " + outdir + "; ensure the path is valid",
                     e);
         }
+    }
+
+    @Override
+    public void visualizeSotreVal(Object value) {
+        this.sbStore.append("  " + prepareString(value.toString()) + "\\n");
     }
 }

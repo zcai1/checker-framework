@@ -7,10 +7,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import com.sun.source.tree.Tree;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import javax.lang.model.element.Element;
 import org.checkerframework.dataflow.cfg.block.Block;
+import org.checkerframework.dataflow.cfg.block.ExceptionBlock;
+import org.checkerframework.dataflow.cfg.block.RegularBlock;
 import org.checkerframework.dataflow.cfg.node.Node;
 
 /**
@@ -128,6 +131,85 @@ public class AnalysisResult<A extends AbstractValue<A>, S extends Store<S>> {
      */
     public S getStoreBefore(Node node) {
         return runAnalysisFor(node, true);
+    }
+
+    /**
+     * @return the regular store immediately before a given {@link Block}
+     */
+    public S getStoreBefore(Block bb) {
+        TransferInput<A, S> transferInput = stores.get(bb);
+        AbstractAnalysis<A, S, ?> analysis = transferInput.analysis;
+        switch (analysis.getDirection()) {
+            case FORWARD:
+                {
+                    return transferInput.getRegularStore();
+                }
+            case BACKWARD:
+                {
+                    Node firstNode;
+                    switch (bb.getType()) {
+                        case REGULAR_BLOCK:
+                            firstNode = ((RegularBlock) bb).getContents().get(0);
+                            break;
+                        case EXCEPTION_BLOCK:
+                            firstNode = ((ExceptionBlock) bb).getNode();
+                            break;
+                        default:
+                            firstNode = null;
+                    }
+                    if (firstNode == null) {
+                        // this block doesn't contains any node, return store in transfer input
+                        return transferInput.getRegularStore();
+                    }
+                    return analysis.runAnalysisFor(firstNode, true, transferInput);
+                }
+            default:
+                {
+                    assert false;
+                }
+        }
+        // dead code
+        return null;
+    }
+
+    /**
+     * @return the regular store immediately after a given {@link Block}
+     */
+    public S getStoreAfter(Block bb) {
+        TransferInput<A, S> transferInput = stores.get(bb);
+        AbstractAnalysis<A, S, ?> analysis = transferInput.analysis;
+        switch (analysis.getDirection()) {
+            case FORWARD:
+                {
+                    Node lastNode;
+                    switch (bb.getType()) {
+                        case REGULAR_BLOCK:
+                            List<Node> blockContents = ((RegularBlock) bb).getContents();
+                            lastNode = blockContents.get(blockContents.size() - 1);
+                            break;
+                        case EXCEPTION_BLOCK:
+                            lastNode = ((ExceptionBlock) bb).getNode();
+                            break;
+                        default:
+                            lastNode = null;
+                    }
+                    if (lastNode == null) {
+                        // this block doesn't contains any node, return store in transfer input
+                        return transferInput.getRegularStore();
+                    }
+                    return analysis.runAnalysisFor(lastNode, false, transferInput);
+                }
+            case BACKWARD:
+                {
+                    return transferInput.getRegularStore();
+                }
+            default:
+                {
+                    assert false;
+                }
+        }
+        // dead code
+        return null;
     }
 
     /**
