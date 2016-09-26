@@ -38,7 +38,7 @@ public class ConstantPropagationTransfer
     @Override
     public TransferResult<Constant, ConstantPropagationStore> visitNode(
             Node n, TransferInput<Constant, ConstantPropagationStore> p) {
-        return new RegularTransferResult<>(null, p.getRegularStore());
+        return new RegularTransferResult<>(null, p.getRegularStore().copy());
     }
 
     @Override
