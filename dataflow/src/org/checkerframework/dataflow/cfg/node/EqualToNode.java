@@ -22,11 +22,6 @@ public class EqualToNode extends BinaryOperationNode {
     }
 
     @Override
-    public BinaryTree getTree() {
-        return (BinaryTree) tree;
-    }
-
-    @Override
     public <R, P> R accept(NodeVisitor<R, P> visitor, P p) {
         return visitor.visitEqualTo(this, p);
     }
