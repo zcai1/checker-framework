@@ -135,6 +135,11 @@ public interface CFGVisualizer<
      */
     void visualizeStoreKeyVal(String keyName, Object value);
 
+    /**
+     * visualize specific information collected according to the specific kind of Store.
+     * Currently, <code>LiveVariableStore</code> use this method to visualize
+     * @param value the value of the specific information to be visualized
+     */
     void visualizeSotreVal(Object value);
 
     /**
