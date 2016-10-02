@@ -9,7 +9,7 @@ import org.checkerframework.dataflow.util.HashCodeUtils;
 
 /**
  * {@code TransferInput} is used as the input type of the individual transfer
- * functions of a {@link TransferFunction}. It also contains a reference to the
+ * functions of a {@link ForwardTransferFunction}. It also contains a reference to the
  * node for which the transfer function will be applied.
  *
  * <p>
@@ -33,9 +33,9 @@ public class TransferInput<A extends AbstractValue<A>, S extends Store<S>> {
      * The regular result store (or {@code null} if none is present). The
      * following invariant is maintained:
      *
-     * <pre>{@code
-     * store == null &hArr; thenStore != null &amp;&amp; elseStore != null
-     * }</pre>
+     * <pre>
+     * store == null &lt;==&gt; thenStore != null &amp;&amp; elseStore != null
+     * </pre>
      */
     protected final /*@Nullable*/ S store;
 
@@ -43,9 +43,9 @@ public class TransferInput<A extends AbstractValue<A>, S extends Store<S>> {
      * The 'then' result store (or {@code null} if none is present). The
      * following invariant is maintained:
      *
-     * <pre>{@code
-     * store == null &hArr; thenStore != null &amp;&amp; elseStore != null
-     * }</pre>
+     * <pre>
+     * store == null &lt;==&gt; thenStore != null &amp;&amp; elseStore != null
+     * </pre>
      */
     protected final /*@Nullable*/ S thenStore;
 
@@ -53,16 +53,16 @@ public class TransferInput<A extends AbstractValue<A>, S extends Store<S>> {
      * The 'else' result store (or {@code null} if none is present). The
      * following invariant is maintained:
      *
-     * <pre>{@code
-     * store == null &hArr; thenStore != null &amp;&amp; elseStore != null
-     * }</pre>
+     * <pre>
+     * store == null &lt;==&gt; thenStore != null &amp;&amp; elseStore != null
+     * </pre>
      */
     protected final /*@Nullable*/ S elseStore;
 
     /**
      * The corresponding analysis class to get intermediate flow results.
      */
-    protected final Analysis<A, S, ?> analysis;
+    protected final AbstractAnalysis<A, S, ?> analysis;
 
     /**
      * Create a {@link TransferInput}, given a {@link TransferResult} and a
@@ -79,7 +79,7 @@ public class TransferInput<A extends AbstractValue<A>, S extends Store<S>> {
      * The node-value mapping {@code nodeValues} is provided by the analysis and
      * is only read from within this {@link TransferInput}.
      */
-    public TransferInput(Node n, Analysis<A, S, ?> analysis, TransferResult<A, S> to) {
+    public TransferInput(Node n, AbstractAnalysis<A, S, ?> analysis, TransferResult<A, S> to) {
         node = n;
         this.analysis = analysis;
         if (to.containsTwoStores()) {
@@ -106,7 +106,7 @@ public class TransferInput<A extends AbstractValue<A>, S extends Store<S>> {
      * The node-value mapping {@code nodeValues} is provided by the analysis and
      * is only read from within this {@link TransferInput}.
      */
-    public TransferInput(Node n, Analysis<A, S, ?> analysis, S s) {
+    public TransferInput(Node n, AbstractAnalysis<A, S, ?> analysis, S s) {
         node = n;
         this.analysis = analysis;
         store = s;
@@ -123,7 +123,7 @@ public class TransferInput<A extends AbstractValue<A>, S extends Store<S>> {
      * stored internally and are not allowed to be used elsewhere. Full control
      * of them is transfered to this object.
      */
-    public TransferInput(Node n, Analysis<A, S, ?> analysis, S s1, S s2) {
+    public TransferInput(Node n, AbstractAnalysis<A, S, ?> analysis, S s1, S s2) {
         node = n;
         this.analysis = analysis;
         thenStore = s1;

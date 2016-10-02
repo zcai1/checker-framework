@@ -22,7 +22,7 @@ public abstract class BlockImpl implements Block {
     protected BlockType type;
 
     /** The set of predecessors. */
-    protected Set<BlockImpl> predecessors;
+    protected Set<Block> predecessors;
 
     /**
      * @return a fresh identifier
@@ -45,10 +45,11 @@ public abstract class BlockImpl implements Block {
         return type;
     }
 
+    @Override
     /**
      * @return the list of predecessors of this basic block
      */
-    public Set<BlockImpl> getPredecessors() {
+    public Set<Block> getPredecessors() {
         return Collections.unmodifiableSet(predecessors);
     }
 

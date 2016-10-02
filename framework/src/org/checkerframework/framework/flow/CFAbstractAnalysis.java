@@ -2,12 +2,14 @@ package org.checkerframework.framework.flow;
 
 import java.util.List;
 import java.util.Set;
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Types;
 import org.checkerframework.common.basetype.BaseTypeChecker;
-import org.checkerframework.dataflow.analysis.Analysis;
+import org.checkerframework.dataflow.analysis.ForwardAnalysisImpl;
 import org.checkerframework.framework.source.SourceChecker;
 import org.checkerframework.framework.type.AnnotatedTypeFactory;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
@@ -44,7 +46,14 @@ public abstract class CFAbstractAnalysis<
                 V extends CFAbstractValue<V>,
                 S extends CFAbstractStore<V, S>,
                 T extends CFAbstractTransfer<V, S, T>>
-        extends Analysis<V, S, T> {
+        extends ForwardAnalysisImpl<V, S, T> {
+
+    /** The associated processing environment */
+    protected final ProcessingEnvironment env;
+
+    /** Instance of the types utility. */
+    protected final Types types;
+
     /**
      * The qualifier hierarchy for which to track annotations.
      */
@@ -76,10 +85,12 @@ public abstract class CFAbstractAnalysis<
             BaseTypeChecker checker,
             GenericAnnotatedTypeFactory<V, S, T, ? extends CFAbstractAnalysis<V, S, T>> factory,
             List<Pair<VariableElement, V>> fieldValues) {
-        super(checker.getProcessingEnvironment());
+        super();
 
         qualifierHierarchy = factory.getQualifierHierarchy();
         typeHierarchy = factory.getTypeHierarchy();
+        this.env = checker.getProcessingEnvironment();
+        this.types = env.getTypeUtils();
         this.atypeFactory = factory;
         this.checker = checker;
         this.transferFunction = createTransferFunction();
@@ -142,6 +153,14 @@ public abstract class CFAbstractAnalysis<
             return null;
         }
         return new CFValue(analysis, annotations, underlyingType);
+    }
+
+    public ProcessingEnvironment getEnv() {
+        return env;
+    }
+
+    public Types getTypes() {
+        return types;
     }
 
     public TypeHierarchy getTypeHierarchy() {

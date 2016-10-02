@@ -727,9 +727,9 @@ public class CFGBuilder {
             // fix predecessor lists by removing any unreachable predecessors
             for (Block c : worklist) {
                 BlockImpl cur = (BlockImpl) c;
-                for (BlockImpl pred : new HashSet<>(cur.getPredecessors())) {
-                    if (!worklist.contains(pred)) {
-                        cur.removePredecessor(pred);
+                for (Block pred : new HashSet<>(cur.getPredecessors())) {
+                    if (!worklist.contains((BlockImpl) pred)) {
+                        cur.removePredecessor((BlockImpl) pred);
                     }
                 }
             }
@@ -769,7 +769,7 @@ public class CFGBuilder {
                     ConditionalBlockImpl cb = (ConditionalBlockImpl) cur;
                     assert cb.getPredecessors().size() == 1;
                     if (cb.getThenSuccessor() == cb.getElseSuccessor()) {
-                        BlockImpl pred = cb.getPredecessors().iterator().next();
+                        BlockImpl pred = (BlockImpl) cb.getPredecessors().iterator().next();
                         PredecessorHolder predecessorHolder = getPredecessorHolder(pred, cb);
                         BlockImpl succ = (BlockImpl) cb.getThenSuccessor();
                         succ.removePredecessor(cb);
@@ -864,19 +864,19 @@ public class CFGBuilder {
 
             RegularBlockImpl cur = start;
             empty.add(cur);
-            for (final BlockImpl pred : cur.getPredecessors()) {
+            for (final Block pred : cur.getPredecessors()) {
                 switch (pred.getType()) {
                     case SPECIAL_BLOCK:
                         // add pred correctly to predecessor list
-                        predecessors.add(getPredecessorHolder(pred, cur));
+                        predecessors.add(getPredecessorHolder((BlockImpl) pred, cur));
                         break;
                     case CONDITIONAL_BLOCK:
                         // add pred correctly to predecessor list
-                        predecessors.add(getPredecessorHolder(pred, cur));
+                        predecessors.add(getPredecessorHolder((BlockImpl) pred, cur));
                         break;
                     case EXCEPTION_BLOCK:
                         // add pred correctly to predecessor list
-                        predecessors.add(getPredecessorHolder(pred, cur));
+                        predecessors.add(getPredecessorHolder((BlockImpl) pred, cur));
                         break;
                     case REGULAR_BLOCK:
                         RegularBlockImpl r = (RegularBlockImpl) pred;
@@ -887,7 +887,7 @@ public class CFGBuilder {
                             }
                         } else {
                             // add pred correctly to predecessor list
-                            predecessors.add(getPredecessorHolder(pred, cur));
+                            predecessors.add(getPredecessorHolder((BlockImpl) pred, cur));
                         }
                         break;
                 }
@@ -1539,7 +1539,7 @@ public class CFGBuilder {
 
         /**
          * Extend the list of extended nodes with a node, where
-         * {@code node} might throw the exception {@code cause}.
+         * <code>node</code> might throw the exception <code>cause</code>.
          *
          * @param node
          *            The node to add.
@@ -1555,8 +1555,8 @@ public class CFGBuilder {
 
         /**
          * Extend the list of extended nodes with a node, where
-         * {@code node} might throw any of the exception in
-         * {@code causes}.
+         * <code>node</code> might throw any of the exception in
+         * <code>causes</code>.
          *
          * @param node
          *            The node to add.
@@ -1577,9 +1577,9 @@ public class CFGBuilder {
         }
 
         /**
-         * Insert {@code node} after {@code pred} in
+         * Insert <code>node</code> after <code>pred</code> in
          * the list of extended nodes, or append to the list if
-         * {@code pred} is not present.
+         * <code>pred</code> is not present.
          *
          * @param node
          *            The node to add.
@@ -1594,9 +1594,9 @@ public class CFGBuilder {
         }
 
         /**
-         * Insert a {@code node} that might throw the exception
-         * {@code cause} after {@code pred} in the list of
-         * extended nodes, or append to the list if {@code pred}
+         * Insert a <code>node</code> that might throw the exception
+         * <code>cause</code> after <code>pred</code> in the list of
+         * extended nodes, or append to the list if <code>pred</code>
          * is not present.
          *
          * @param node
@@ -1630,8 +1630,8 @@ public class CFGBuilder {
         }
 
         /**
-         * Insert {@code n} after the node {@code pred} in the
-         * list of extended nodes, or append {@code n} if {@code pred}
+         * Insert <code>n</code> after the node <code>pred</code> in the
+         * list of extended nodes, or append <code>n</code> if <code>pred</code>
          * is not present.
          *
          * @param n
@@ -2589,7 +2589,7 @@ public class CFGBuilder {
         }
 
         /**
-         * Note 1: Requires {@code tree} to be a field or method access
+         * Note 1: Requires <code>tree</code> to be a field or method access
          * tree.
          * <p>
          * Note 2: Visits the receiver and adds all necessary blocks to the CFG.
@@ -3952,12 +3952,12 @@ public class CFGBuilder {
         }
 
         /**
-         * Maps a {@code Tree} its directly enclosing {@code ParenthesizedTree} if one exists.
+         * Maps a <code>Tree</code> its directly enclosing <code>ParenthesizedTree</code> if one exists.
          *
          * This map is used by {@link CFGTranslationPhaseOne#addToLookupMap(Node)} to
-         * associate a {@code ParenthesizedTree} with the dataflow {@code Node} that was used
+         * associate a <code>ParenthesizedTree</code> with the dataflow <code>Node</code> that was used
          * during inference. This map is necessary because dataflow does
-         * not create a {@code Node} for a {@code ParenthesizedTree.}
+         * not create a <code>Node</code> for a <code>ParenthesizedTree.</code>
          */
         private final Map<Tree, ParenthesizedTree> parenMapping = new HashMap<>();
 
