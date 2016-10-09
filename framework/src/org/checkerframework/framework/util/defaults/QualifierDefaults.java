@@ -108,7 +108,8 @@ public class QualifierDefaults {
         TypeUseLocation.LOCAL_VARIABLE,
         TypeUseLocation.RESOURCE_VARIABLE,
         TypeUseLocation.EXCEPTION_PARAMETER,
-        TypeUseLocation.IMPLICIT_UPPER_BOUND
+        TypeUseLocation.IMPLICIT_UPPER_BOUND,
+        TypeUseLocation.TYPE_DECLARATION
     };
 
     /** CLIMB locations whose standard default is bottom for a given type system. */
@@ -971,6 +972,15 @@ public class QualifierDefaults {
                     case UPPER_BOUND:
                         {
                             if (this.isUpperBound) {
+                                addAnnotation(t, qual);
+                            }
+                            break;
+                        }
+                    case TYPE_DECLARATION:
+                        {
+                            if (scope != null
+                                    && (scope.getKind().isClass() || scope.getKind().isInterface())
+                                    && t == type) {
                                 addAnnotation(t, qual);
                             }
                             break;
