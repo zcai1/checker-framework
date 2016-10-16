@@ -291,6 +291,27 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         visitorState.setMethodTree(null);
         visitorState.setAssignmentContext(null);
         try {
+            if (!TreeUtils.hasExplicitConstructor(classTree)) {
+                checkDefaultConstructor(classTree);
+            }
+
+            // We validate class tree to see if the annotation on it is allowed on type declaration location
+            validateTypeOf(classTree);
+            /* Visit the extends and implements clauses.
+             * The superclass also visits them, but only calls visitParameterizedType, which
+             * loses a main modifier.
+             */
+            Tree ext = classTree.getExtendsClause();
+            if (ext != null) {
+                validateTypeOf(ext);
+            }
+
+            List<? extends Tree> impls = classTree.getImplementsClause();
+            if (impls != null) {
+                for (Tree im : impls) {
+                    validateTypeOf(im);
+                }
+            }
             processClassTree(classTree);
             atypeFactory.postProcessClassTree(classTree);
         } finally {
@@ -1200,10 +1221,9 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
             if (enclosing.getKind() == Tree.Kind.METHOD) {
 
                 MethodTree enclosingMethod = TreeUtils.enclosingMethod(getCurrentPath());
-                boolean valid = validateTypeOf(enclosing);
-                if (valid) {
-                    ret = atypeFactory.getMethodReturnType(enclosingMethod, node);
-                }
+                // We don't validate enclosingMethod again, because it's already been validated during visitMethod
+                ret = atypeFactory.getMethodReturnType(enclosingMethod, node);
+
             } else {
                 Pair<AnnotatedDeclaredType, AnnotatedExecutableType> result =
                         atypeFactory.getFnInterfaceFromTree((LambdaExpressionTree) enclosing);
@@ -1764,6 +1784,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         if (shouldSkipUses(valueExp)) {
             return;
         }
+
         if (varType.getKind() == TypeKind.ARRAY
                 && valueExp instanceof NewArrayTree
                 && ((NewArrayTree) valueExp).getType() == null) {
