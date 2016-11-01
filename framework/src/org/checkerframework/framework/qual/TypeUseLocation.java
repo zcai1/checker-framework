@@ -96,7 +96,27 @@ public enum TypeUseLocation {
      * {@code @AC2 String [] @AC1 []}
      */
     ARRAY_COMPONENT,
-    /** Apply if nothing more concrete is provided. TODO: clarify relation to ALL. */
+
+    /**
+     * TODO is this documentation correct? Or does it really represent interface extends case?
+     * Represents extends location of a class/interface/enum/annotation type
+     */
+    EXTENDS,
+
+    IMPLEMENTS,
+
+    THROWS,
+
+    INSTANCEOF,
+
+    NEW,
+
+    CAST,
+
+    /**
+     * Apply if nothing more concrete is provided.
+     * TODO: clarify relation to ALL.
+     */
     OTHERWISE,
 
     /**

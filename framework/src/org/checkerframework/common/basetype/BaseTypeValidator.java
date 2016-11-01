@@ -8,12 +8,16 @@ import com.sun.source.tree.AnnotatedTypeTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.InstanceOfTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.ParameterizedTypeTree;
+import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.Tree;
+import com.sun.source.tree.Tree.Kind;
+import com.sun.source.tree.TypeCastTree;
 import com.sun.source.tree.TypeParameterTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
@@ -565,7 +569,68 @@ class TargetLocationValidator extends AnnotatedTypeScanner<Void, Tree> {
     };
 
     private void validateMainModifier(AnnotatedTypeMirror type, Tree tree) {
+        Kind treeKind = tree.getKind();
+        // Cases where only tree is enough to determine its TypeUseLocation
+        boolean treeIsEnough = false;
+        switch (treeKind) {
+                //Additional handling for variable tree initializer
+                /*case VARIABLE:
+                Tree initializerTree = ((VariableTree)tree).getInitializer();
+                if(initializerTree != null){
+                    AnnotatedTypeMirror initializerType = this.validator.atypeFactory.getAnnotatedType(initializerTree);
+                    validateMainModifier(initializerType, initializerTree);
+                }
+                // treeIsEnough remains false => need additional checks for main modifier
+                break;*/
+                //Additional handling for method tree throw tree
+            case METHOD:
+                List<? extends ExpressionTree> throwTrees = ((MethodTree) tree).getThrows();
+                for (Tree throwTree : throwTrees) {
+                    AnnotatedTypeMirror throwType =
+                            this.validator.atypeFactory.getAnnotatedType(throwTree);
+                    checkValidLocation(throwType, throwTree, TypeUseLocation.THROWS);
+                }
+                break;
+                // We don't validate throw tree separately. Instead, we do it in MethodTree
+                /*case THROW:
+                Tree throwTree = ((ThrowTree)tree).getExpression();
+                AnnotatedTypeMirror throwType = this.validator.atypeFactory.getAnnotatedType(throwTree);
+                checkValidLocation(throwType, throwTree, TypeUseLocation.THROWS);
+                treeIsEnough = true;
+                break;*/
+            case INSTANCE_OF:
+                Tree typeTree = ((InstanceOfTree) tree).getType();
+                AnnotatedTypeMirror instanceOfType =
+                        this.validator.atypeFactory.getAnnotatedType(typeTree);
+                checkValidLocation(instanceOfType, typeTree, TypeUseLocation.INSTANCEOF);
+                treeIsEnough = true;
+                break;
+            case NEW_CLASS:
+                //if(printDebug) System.out.println("Examining new class tree type : " + type);
+                checkValidLocation(type, tree, TypeUseLocation.NEW);
+                treeIsEnough = true;
+                break;
+            case TYPE_CAST:
+                Tree castTree = ((TypeCastTree) tree).getType();
+                AnnotatedTypeMirror castType =
+                        this.validator.atypeFactory.getAnnotatedType(castTree);
+                checkValidLocation(castType, castTree, TypeUseLocation.CAST);
+                treeIsEnough = true;
+                break;
+                // Don't need this, because if there is overriding annotation, they will be treated like normal annotated type,
+                // which might be in top level or recursive deep levels(array component or type argument)
+                /*case TYPE_PARAMETER:
+                checkValidLocation(type, tree, TypeUseLocation.TYPE_PARAMETER_OVERRIDE);
+                break;*/
+            default:
+                break;
+        }
+        if (treeIsEnough) return;
+        // If tree can't be used to determine the TypeUseLocation, use the Element, but only with a specific set of Trees:
+        // namely, VariableTree, MethodTree, ClassTree
         Element elt = getElement(tree);
+        // Skip trees we don't want to validate explicit annotation
+        if (elt == null) return;
         ElementKind elementKind = elt.getKind();
         switch (elementKind) {
             case FIELD:
@@ -583,7 +648,7 @@ class TargetLocationValidator extends AnnotatedTypeScanner<Void, Tree> {
                 checkValidLocation(type, tree, TypeUseLocation.EXCEPTION_PARAMETER);
                 break;
             case PARAMETER:
-                // TODO method receciver and return type
+                // TODO method receiver and return type
                 if (elt.getSimpleName().contentEquals("this")) {
                     checkValidLocation(type, tree, TypeUseLocation.RECEIVER);
                 } else {
@@ -592,7 +657,7 @@ class TargetLocationValidator extends AnnotatedTypeScanner<Void, Tree> {
                 break;
             case CONSTRUCTOR:
             case METHOD:
-                // Upper bounf of type parameter declared in generic method after getting
+                // Upper bound of type parameter declared in generic method after getting
                 // nearest enclosing element is also METHOD element. BUT its tree is no
                 // method tree. So, we add additional restriction: only when the tree is also
                 // method tree, they use is seen to be on method return.
@@ -627,81 +692,25 @@ class TargetLocationValidator extends AnnotatedTypeScanner<Void, Tree> {
     private Element getElement(Tree tree) {
         Element elt;
         switch (tree.getKind()) {
-            case MEMBER_SELECT:
-                elt = TreeUtils.elementFromUse((MemberSelectTree) tree);
+            case VARIABLE:
+                elt = TreeUtils.elementFromDeclaration((VariableTree) tree);
                 break;
-
-            case IDENTIFIER:
-                elt = TreeUtils.elementFromUse((IdentifierTree) tree);
+            case METHOD:
+                elt = TreeUtils.elementFromDeclaration((MethodTree) tree);
                 break;
-
-            case METHOD_INVOCATION:
-                elt = TreeUtils.elementFromUse((MethodInvocationTree) tree);
+            case CLASS:
+            case ENUM:
+            case INTERFACE:
+            case ANNOTATION_TYPE:
+                elt = TreeUtils.elementFromDeclaration((ClassTree) tree);
                 break;
-
-                // TODO cases for array access, etc. -- every expression tree
-                // (The above probably means that we should use defaults in the
-                // scope of the declaration of the array.  Is that right?  -MDE)
-
             default:
-                // If no associated symbol was found, use the tree's (lexical)
-                // scope.
-                elt = nearestEnclosingExceptLocal(tree);
+                // We don't care about other trees, since they trees other than the above don't need Element to determine its
+                // location/ these trees don't contains a top level main modifier, thus no need to validate
+                elt = null;
+                break;
         }
         return elt;
-    }
-
-    private Element nearestEnclosingExceptLocal(Tree tree) {
-        TreePath path = validator.atypeFactory.getPath(tree);
-        if (path == null) {
-            Element method = validator.atypeFactory.getEnclosingMethod(tree);
-            if (method != null) {
-                return method;
-            } else {
-                return InternalUtils.symbol(tree);
-            }
-        }
-
-        Tree prev = null;
-
-        for (Tree t : path) {
-            switch (t.getKind()) {
-                case VARIABLE:
-                    VariableTree vtree = (VariableTree) t;
-                    ExpressionTree vtreeInit = vtree.getInitializer();
-                    // TODO: evaluate comment-out of these lines
-                    /*if (vtreeInit != null && prev == vtreeInit) {
-                        Element elt = TreeUtils.elementFromDeclaration((VariableTree) t);
-                        DefaultQualifier d = elt.getAnnotation(DefaultQualifier.class);
-                        DefaultQualifiers ds = elt.getAnnotation(DefaultQualifiers.class);
-
-                        if (d == null && ds == null) {
-                            break;
-                        }
-                    }*/
-                    if (prev != null && prev.getKind() == Tree.Kind.MODIFIERS) {
-                        // Annotations are modifiers. We do not want to apply the local variable default to
-                        // annotations. Without this, test fenum/TestSwitch failed, because the default for
-                        // an argument became incompatible with the declared type.
-                        break;
-                    }
-                    return TreeUtils.elementFromDeclaration((VariableTree) t);
-                case METHOD:
-                    return TreeUtils.elementFromDeclaration((MethodTree) t);
-                case CLASS:
-                case ENUM:
-                case INTERFACE:
-                case ANNOTATION_TYPE:
-                    //System.out.println("Hit!");
-                    return TreeUtils.elementFromDeclaration((ClassTree) t);
-                    //case TYPE_PARAMETER:
-                    //return TreeUtils.elementFromUse((TypeParameterTree)t);
-                default: // Do nothing. continue finding parent paths
-            }
-            prev = t;
-        }
-        // Seems like dead code because there must be a matching case in the for loop and return immediately
-        return null;
     }
 
     private void checkValidLocation(AnnotatedTypeMirror type, Tree tree, TypeUseLocation location) {
@@ -732,7 +741,7 @@ class TargetLocationValidator extends AnnotatedTypeScanner<Void, Tree> {
             AnnotatedTypeMirror type, Tree tree, TypeUseLocation location) {
         if (printDebug) {
             System.out.println(
-                    "-----!!!----- Error =>  type: "
+                    "\n-----!!!----- Error =>  type: "
                             + type
                             + " \ntree: "
                             + tree
@@ -760,7 +769,12 @@ class TargetLocationValidator extends AnnotatedTypeScanner<Void, Tree> {
                             + " kind: "
                             + type.getKind());
             Element elt = getElement(p);
-            System.out.println("elt: " + elt + " resulteltkind: " + elt.getKind());
+            if (elt != null) {
+                System.out.println("elt: " + elt + " resulteltkind: " + elt.getKind());
+            } else {
+                System.out.println(
+                        "~~~~~~~~~~~~Unhandle tree case: skip when element is null for the tree below:");
+            }
             System.out.println("tree is: " + p + " usedtreekind: " + p.getKind());
             if (visitedNodes.containsKey(type)) {
                 System.out.println("--- Skipped because visited");
@@ -782,6 +796,28 @@ class TargetLocationValidator extends AnnotatedTypeScanner<Void, Tree> {
                 checkValidLocation(tArg, p, TypeUseLocation.TYPE_ARGUMENT);
             }
             scan(type.getTypeArguments(), p);
+        }
+        if (TreeUtils.isClassTree(p)) {
+            Tree extendsTree = ((ClassTree) p).getExtendsClause();
+            if (extendsTree != null) {
+                AnnotatedTypeMirror extendsType =
+                        this.validator.atypeFactory.getAnnotatedType(extendsTree);
+                /*if(printDebug) {
+                    System.out.println("Extends tree is: " + extendsTree + " treekind: " + extendsTree.getKind());
+                    System.out.println("Extends type is: " + extendsType);
+                }*/
+                checkValidLocation(extendsType, extendsTree, TypeUseLocation.EXTENDS);
+            }
+            List<? extends Tree> implementsTrees = ((ClassTree) p).getImplementsClause();
+            for (Tree implementsTree : implementsTrees) {
+                AnnotatedTypeMirror implmentsType =
+                        this.validator.atypeFactory.getAnnotatedType(implementsTree);
+                /*if(printDebug) {
+                    System.out.println("Implements tree is: " + implementsTree + " treekind: " + implementsTree.getKind());
+                    System.out.println("Implementss type is: " + implmentsType);
+                }*/
+                checkValidLocation(implmentsType, implementsTree, TypeUseLocation.IMPLEMENTS);
+            }
         }
         return null;
     }
