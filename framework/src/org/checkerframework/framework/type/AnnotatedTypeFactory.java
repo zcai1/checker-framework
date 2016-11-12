@@ -1323,7 +1323,18 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         }
         addComputedTypeAnnotations(element, type);
         if (withCombineConstraints) {
-            vputil.combineTypeWithType(owner, type, this);
+            AnnotatedTypeMirror decltype = this.fromElement(element);
+            AnnotatedTypeMirror combinedType = vputil.combineTypeWithType(owner, decltype, this);
+            type.replaceAnnotation(vputil.getAnnotation(combinedType, this));
+            if (type.getKind() == TypeKind.DECLARED && combinedType.getKind() == TypeKind.DECLARED) {
+                AnnotatedDeclaredType Type = (AnnotatedDeclaredType) type;
+                AnnotatedDeclaredType CombinedType = (AnnotatedDeclaredType) combinedType;
+                Type.setTypeArguments(CombinedType.getTypeArguments());
+            } else if (type.getKind() == TypeKind.ARRAY && combinedType.getKind() == TypeKind.ARRAY) {
+                AnnotatedArrayType arrayType = (AnnotatedArrayType) type;
+                AnnotatedArrayType arrayCombinedType = (AnnotatedArrayType) combinedType;
+                arrayType.setComponentType(arrayCombinedType.getComponentType());
+            }
         }
     }
 
@@ -1506,14 +1517,17 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         for (AnnotatedTypeMirror atm : tvars) {
             AnnotatedTypeVariable atv = (AnnotatedTypeVariable) atm;
-            AnnotatedTypeMirror upper = typeVarSubstitutor.substitute(mapping, atv.getUpperBound());
+            AnnotatedTypeMirror upper = atv.getUpperBound();
             if (withCombineConstraints) {
-                vputil.combineTypeWithType(type, upper, this);
+                upper = vputil.combineTypeWithType(type, upper, this);
             }
-            AnnotatedTypeMirror lower = typeVarSubstitutor.substitute(mapping, atv.getLowerBound());
+            upper = typeVarSubstitutor.substitute(mapping, upper);
+            AnnotatedTypeMirror lower = atv.getLowerBound();
             if (withCombineConstraints) {
-                vputil.combineTypeWithType(type, lower, this);
+                lower = vputil.combineTypeWithType(type, lower, this);
             }
+            lower = typeVarSubstitutor.substitute(mapping, lower);
+
             res.add(new AnnotatedTypeParameterBounds(upper, lower));
         }
         return res;
@@ -1948,21 +1962,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         ExecutableElement methodElt = TreeUtils.elementFromUse(tree);
         AnnotatedTypeMirror receiverType = getReceiverType(tree);
 
-        final AnnotatedExecutableType methodOfReceiver = AnnotatedTypes.asMemberOf(types, this, receiverType, methodElt);
-        AnnotatedTypeMirror returnType = methodOfReceiver.getReturnType();
-        List<AnnotatedTypeMirror> parameterTypes = methodOfReceiver.getParameterTypes();
-        List<AnnotatedTypeVariable> typeVariables = methodOfReceiver.getTypeVariables();
-
-        if (withCombineConstraints) {
-            vputil.combineTypeWithType(receiverType, returnType, this);
-            for (AnnotatedTypeMirror parameterType : parameterTypes) {
-                vputil.combineTypeWithType(receiverType, parameterType, this);
-            }
-            for (AnnotatedTypeVariable typeVariable: typeVariables) {
-                vputil.combineTypeWithType(receiverType, typeVariable, this);
-            }
-        }
-
         Pair<AnnotatedExecutableType, List<AnnotatedTypeMirror>> mfuPair =
                 methodFromUse(tree, methodElt, receiverType);
         if (checker.shouldResolveReflection()
@@ -1998,6 +1997,41 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         AnnotatedExecutableType methodType =
                 AnnotatedTypes.asMemberOf(types, this, receiverType, methodElt);
+
+        if (withCombineConstraints) {
+            AnnotatedExecutableType declMethodType = this.fromElement(methodElt);
+            this.addComputedTypeAnnotations(methodElt, declMethodType);
+            AnnotatedTypeMirror returnType = declMethodType.getReturnType();
+            List<AnnotatedTypeMirror> parameterTypes = declMethodType.getParameterTypes();
+            List<AnnotatedTypeVariable> typeVariables = declMethodType.getTypeVariables();
+
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new HashMap<>();
+
+
+            if (returnType.getKind() != TypeKind.VOID) {
+                AnnotatedTypeMirror r = vputil.combineTypeWithType(receiverType, returnType, this);
+                mappings.put(returnType, r);
+            }
+            for (AnnotatedTypeMirror parameterType : parameterTypes) {
+                AnnotatedTypeMirror p = vputil.combineTypeWithType(receiverType, parameterType, this);
+                mappings.put(parameterType, p);
+            }
+            for (AnnotatedTypeVariable typeVariable: typeVariables) {
+                AnnotatedTypeMirror ub = vputil.combineTypeWithType(receiverType, typeVariable.getUpperBound(), this);
+                mappings.put(typeVariable.getUpperBound(), ub);
+                AnnotatedTypeMirror lb = vputil.combineTypeWithType(receiverType, typeVariable.getLowerBound(), this);
+                mappings.put(typeVariable.getLowerBound(), lb);
+            }
+
+            declMethodType = (AnnotatedExecutableType) AnnotatedTypeReplacer.replace(declMethodType, mappings);
+
+            // Because we can't viewpoint adapt asMemberOf result, we adapt the declared method first, and sets the
+            // corresponding parts to asMemberOf result
+            methodType.setReturnType(declMethodType.getReturnType());
+            methodType.setParameterTypes(declMethodType.getParameterTypes());
+            methodType.setTypeVariables(declMethodType.getTypeVariables());
+        }
+
         List<AnnotatedTypeMirror> typeargs = new LinkedList<AnnotatedTypeMirror>();
 
         Map<TypeVariable, AnnotatedTypeMirror> typeVarMapping =
@@ -2123,14 +2157,20 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         List<AnnotatedTypeMirror> parameterTypes = con.getParameterTypes();
         List<AnnotatedTypeVariable> typeVariables = con.getTypeVariables();
+
         if (withCombineConstraints) {
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new HashMap<>();
             for (AnnotatedTypeMirror parameterType : parameterTypes) {
-                vputil.combineTypeWithType(type, parameterType, this);
+                AnnotatedTypeMirror p = vputil.combineTypeWithType(type, parameterType, this);
+                mappings.put(parameterType, p);
             }
             for (AnnotatedTypeMirror typeVariable : typeVariables) {
-                vputil.combineTypeWithType(type, typeVariable, this);
+                AnnotatedTypeMirror tv = vputil.combineTypeWithType(type, typeVariable, this);
+                mappings.put(typeVariable, tv);
             }
+            con = (AnnotatedExecutableType) AnnotatedTypeReplacer.replace(con, mappings);
         }
+
         List<AnnotatedTypeMirror> typeargs = new LinkedList<AnnotatedTypeMirror>();
 
         Map<TypeVariable, AnnotatedTypeMirror> typeVarMapping =

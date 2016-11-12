@@ -5,11 +5,11 @@ import org.checkerframework.framework.type.AnnotatedTypeFactory;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
 
 /**
- * Base class for viewpoint adaptation in framework side. Subclass should extend this class to perform type
- * system specific viewpoint adaptation, because FrameworkVPUtil doesn't perform real viewpoint adaptation
- * - it simply returns declared type
- * @author tamier
+ * Base class for viewpoint adaptation in framework side. Subclass should extend this class to
+ * perform type system specific viewpoint adaptation, because FrameworkVPUtil doesn't perform real
+ * viewpoint adaptation - it simply returns declared type
  *
+ * @author tamier
  */
 public class FrameworkVPUtil extends GenericVPUtil<AnnotationMirror> {
 
@@ -21,12 +21,12 @@ public class FrameworkVPUtil extends GenericVPUtil<AnnotationMirror> {
     }
 
     @Override
-    public AnnotationMirror getAnnotationFromModifier(AnnotationMirror t) {
+    protected AnnotationMirror getAnnotationFromModifier(AnnotationMirror t) {
         return t;
     }
 
     @Override
-    public AnnotationMirror combineModifierWithModifier(
+    protected AnnotationMirror combineModifierWithModifier(
             AnnotationMirror recvModifier, AnnotationMirror declModifier, AnnotatedTypeFactory f) {
         return declModifier;
     }
