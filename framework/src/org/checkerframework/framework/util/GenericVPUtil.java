@@ -20,10 +20,11 @@ import org.checkerframework.framework.type.AnnotatedTypeReplacer;
 import org.checkerframework.javacutil.Pair;
 
 /**
- * Generic version of VPUtil. It has two major clients: one is on framework side, the other is on inference side.
- * See {@link FrameworkVPUtil} for more information.
- * @author tamier
+ * Generic version of VPUtil. It has two major clients: one is on framework side, the other is on
+ * inference side. See {@link FrameworkVPUtil} for more information.
  *
+ * @author tamier
+ * @author wmdietl
  * @param <T> AnnotationMirror(framework side) or Slot(inference side)
  */
 public abstract class GenericVPUtil<T> {
@@ -35,6 +36,7 @@ public abstract class GenericVPUtil<T> {
     /**
      * Viewpoint adapt declModifier to recvModifier. Modifier here is not equal to AnnotationMirror.
      * Rather, it can be AnnotationMirror or Slot.
+     *
      * @param recvModifier receiver modifier
      * @param declModifier declared modifier that is being adapted
      * @param f AnnotatedTypeFactory of concrete type system
@@ -45,8 +47,9 @@ public abstract class GenericVPUtil<T> {
             T recvModifier, T declModifier, AnnotatedTypeFactory f);
 
     /**
-     * Extract modifier from AnnotatedTypeMirror. On framework side, we extract AnnotationMiror;
-     * On inference side, we extract slot.
+     * Extract modifier from AnnotatedTypeMirror. On framework side, we extract AnnotationMiror; On
+     * inference side, we extract slot.
+     *
      * @param atm AnnotatedTypeMirror from which modifier is going to be extracted
      * @param f AnnotatedTypeFactory of concrete type system
      * @return modifier extracted
@@ -55,6 +58,7 @@ public abstract class GenericVPUtil<T> {
 
     /**
      * Get and return the AnnotationMirror of a modifier
+     *
      * @param t Source modifier from which AnnotationMirror is being extracted
      * @return AnnotationMirror extracted
      */
@@ -62,6 +66,7 @@ public abstract class GenericVPUtil<T> {
 
     /**
      * Viewpoint Adapt decl to recv, and return the result atm
+     *
      * @param recv receiver in the viewpoint adaptation
      * @param decl declared type in viewpoint adaptation, which needs to be adapted
      * @param f AnnotatedTypeFactory of concrete type system
@@ -69,6 +74,7 @@ public abstract class GenericVPUtil<T> {
      */
     public AnnotatedTypeMirror combineTypeWithType(
             AnnotatedTypeMirror recv, AnnotatedTypeMirror decl, AnnotatedTypeFactory f) {
+        assert recv != null && decl != null && f != null;
         AnnotatedTypeMirror result = null;
         if (recv.getKind() == TypeKind.TYPEVAR) {
             recv = ((AnnotatedTypeVariable) recv).getUpperBound();
@@ -82,8 +88,9 @@ public abstract class GenericVPUtil<T> {
     }
 
     /**
-     * Viewpoint adapt decl to recvModifier. Not side effect free. Modify the passed-in argument,
-     * and return the reference.
+     * Viewpoint adapt decl to recvModifier. Side effect free, i.e. doesn't modify passed-in decl;
+     * Instead create a shallow copy, modify that copy and return it
+     *
      * @param recvModifier modifier of receiver in the viewpoint adaptation
      * @param decl declared type in viewpoint adaptation, which needs to be adapted
      * @param f AnnotatedTypeFactory of concrete type system
@@ -92,52 +99,94 @@ public abstract class GenericVPUtil<T> {
     protected AnnotatedTypeMirror combineModifierWithType(
             T recvModifier, AnnotatedTypeMirror decl, AnnotatedTypeFactory f) {
         if (decl.getKind().isPrimitive()) {
-            T declModifier = getModifier(decl, f);
-            decl.replaceAnnotation(getAnnotationFromModifier(declModifier));
             return decl;
-        } else if (decl instanceof AnnotatedTypeVariable) {
+        } else if (decl.getKind() == TypeKind.TYPEVAR) {
             if (!isTypeVarExtends) {
                 isTypeVarExtends = true;
-                AnnotatedTypeVariable atv = (AnnotatedTypeVariable) decl;
+                AnnotatedTypeVariable atv = (AnnotatedTypeVariable) decl.shallowCopy();
+                Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mapping = new HashMap<>();
+
                 // For type variables, we recursively adapt upper and lower bounds
-                combineModifierWithType(recvModifier, atv.getUpperBound(), f);
-                combineModifierWithType(recvModifier, atv.getLowerBound(), f);
+                AnnotatedTypeMirror resUpper =
+                        combineModifierWithType(recvModifier, atv.getUpperBound(), f);
+                mapping.put(atv.getUpperBound(), resUpper);
+
+                AnnotatedTypeMirror resLower =
+                        combineModifierWithType(recvModifier, atv.getLowerBound(), f);
+                mapping.put(atv.getLowerBound(), resLower);
+
+                AnnotatedTypeMirror result = AnnotatedTypeReplacer.replace(atv, mapping);
+
                 isTypeVarExtends = false;
-                return atv;
+                return result;
             }
             return decl;
-        } else if (decl instanceof AnnotatedDeclaredType) {
-            AnnotatedDeclaredType adt = (AnnotatedDeclaredType) decl;
+        } else if (decl.getKind() == TypeKind.DECLARED) {
+            AnnotatedDeclaredType adt = (AnnotatedDeclaredType) decl.shallowCopy();
+
+            // Mapping between declared type argument to combined type argument
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mapping = new HashMap<>();
+
             T declModifier = getModifier(adt, f);
             T resultModifier = combineModifierWithModifier(recvModifier, declModifier, f);
-            // Replace the main modifier of declared type with the AnnotationMirror of adapted modifier
-            adt.replaceAnnotation(getAnnotationFromModifier(resultModifier));
+
+            // Recursively combine type arguments and store to map
             for (AnnotatedTypeMirror typeArgument : adt.getTypeArguments()) {
                 // Recursively adapt the type arguments of this adt
-                combineModifierWithType(recvModifier, typeArgument, f);
+                AnnotatedTypeMirror combinedTypeArgument =
+                        combineModifierWithType(recvModifier, typeArgument, f);
+                mapping.put(typeArgument, combinedTypeArgument);
             }
-            return adt;
-        } else if (decl instanceof AnnotatedArrayType) {
-            AnnotatedArrayType aat = (AnnotatedArrayType) decl;
+
+            // Construct result type
+            AnnotatedTypeMirror result = AnnotatedTypeReplacer.replace(adt, mapping);
+            result.replaceAnnotation(getAnnotationFromModifier(resultModifier));
+
+            return result;
+        } else if (decl.getKind() == TypeKind.ARRAY) {
+            AnnotatedArrayType aat = (AnnotatedArrayType) decl.shallowCopy();
+
+            // Replace the main modifier
+            T declModifier = getModifier(aat, f);
+            T resultModifier = combineModifierWithModifier(recvModifier, declModifier, f);
+            aat.replaceAnnotation(getAnnotationFromModifier(resultModifier));
+
+            // Combine component type recursively and sets combined component type
             AnnotatedTypeMirror compo = aat.getComponentType();
             // Recursively call itself first on the component type
-            combineModifierWithType(recvModifier, compo, f);
-            T declModifier = getModifier(aat, f);
-            T result = combineModifierWithModifier(recvModifier, declModifier, f);
-            // Replace the annotation of the main modifier of this aat
-            aat.replaceAnnotation(getAnnotationFromModifier(result));
+            AnnotatedTypeMirror combinedCompoType = combineModifierWithType(recvModifier, compo, f);
+            aat.setComponentType(combinedCompoType);
+
             return aat;
-        } else if (decl instanceof AnnotatedWildcardType) {
-            AnnotatedWildcardType awt = (AnnotatedWildcardType) decl;
-            AnnotatedTypeMirror annotatedUpperBound = awt.getExtendsBound();
-            // Recursively adapt the upper bound of this awt
-            combineModifierWithType(recvModifier, annotatedUpperBound, f);
-            AnnotatedTypeMirror annotatedLowerBound = awt.getSuperBound();
-            // Recursively adapt the lower bound of this awt
-            combineModifierWithType(recvModifier, annotatedLowerBound, f);
+        } else if (decl.getKind() == TypeKind.WILDCARD) {
+            AnnotatedWildcardType awt = (AnnotatedWildcardType) decl.shallowCopy();
+
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mapping = new HashMap<>();
+
+            // There is no main modifier for a wildcard
+
+            // Adapt extend
+            AnnotatedTypeMirror extend = awt.getExtendsBound();
+            if (extend != null) {
+                // Recursively adapt the extends bound of this awt
+                AnnotatedTypeMirror combinedExtend =
+                        combineModifierWithType(recvModifier, extend, f);
+                mapping.put(extend, combinedExtend);
+            }
+
+            // Adapt super
+            AnnotatedTypeMirror zuper = awt.getSuperBound();
+            if (zuper != null) {
+                // Recursively adapt the lower bound of this awt
+                AnnotatedTypeMirror combinedZuper = combineModifierWithType(recvModifier, zuper, f);
+                mapping.put(zuper, combinedZuper);
+            }
+
+            AnnotatedTypeMirror result = AnnotatedTypeReplacer.replace(awt, mapping);
+
             return awt;
-        } else if (decl instanceof AnnotatedNullType) {
-            AnnotatedNullType ant = (AnnotatedNullType) decl;
+        } else if (decl.getKind() == TypeKind.NULL) {
+            AnnotatedNullType ant = (AnnotatedNullType) decl.shallowCopy(true);
             T declModifier = getModifier(ant, f);
             T result = combineModifierWithModifier(recvModifier, declModifier, f);
             ant.replaceAnnotation(getAnnotationFromModifier(result));
@@ -150,18 +199,21 @@ public abstract class GenericVPUtil<T> {
     }
 
     /**
-     * If rhs is type variable use whose type arguments should be inferred from receiver - lhs, this method substitutes
-     * that type argument into rhs, and return the reference to rhs. So, this method is not side effect free, i.e., lhs
-     * will be modified after the method returns.
+     * If rhs is type variable use whose type arguments should be inferred from receiver - lhs, this
+     * method substitutes that type argument into rhs, and return the reference to rhs. So, this
+     * method is not side effect free, i.e., rhs will be modified after the method returns.
+     *
      * @param f AnnotatedTypeFactory of concrete type system
-     * @param lhs type from which type arguments are extracted to replace formal type parameters of rhs.
+     * @param lhs type from which type arguments are extracted to replace formal type parameters of
+     *     rhs.
      * @param rhs AnnotatedTypeMirror that might be a formal type parameter
      * @return rhs with its type parameter substituted
      */
     private AnnotatedTypeMirror substituteTVars(
             AnnotatedTypeFactory f, AnnotatedTypeMirror lhs, AnnotatedTypeMirror rhs) {
         if (rhs.getKind() == TypeKind.TYPEVAR) {
-            AnnotatedTypeVariable atv = (AnnotatedTypeVariable) rhs;
+            AnnotatedTypeVariable atv = (AnnotatedTypeVariable) rhs.shallowCopy();
+
             // Base case where actual type argument is extracted
             if (lhs.getKind() == TypeKind.DECLARED) {
                 rhs = getTypeVariableSubstitution(f, (AnnotatedDeclaredType) lhs, atv);
@@ -170,9 +222,9 @@ public abstract class GenericVPUtil<T> {
             // TODO: does that really happen?
         } else if (rhs.getKind() == TypeKind.DECLARED) {
             //System.out.println("before: " + rhs);
-            AnnotatedDeclaredType adt = (AnnotatedDeclaredType) rhs;
-            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mapping =
-                    new HashMap<AnnotatedTypeMirror, AnnotatedTypeMirror>();
+            AnnotatedDeclaredType adt = (AnnotatedDeclaredType) rhs.shallowCopy();
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mapping = new HashMap<>();
+
             for (AnnotatedTypeMirror formalTypeParameter : adt.getTypeArguments()) {
                 AnnotatedTypeMirror actualTypeArgument =
                         substituteTVars(f, lhs, formalTypeParameter);
@@ -189,21 +241,33 @@ public abstract class GenericVPUtil<T> {
             // arguments, but not replace with its main modifier
             rhs = AnnotatedTypeReplacer.replace(adt, mapping);
         } else if (rhs.getKind() == TypeKind.WILDCARD) {
-            AnnotatedWildcardType awt = (AnnotatedWildcardType) rhs;
-            AnnotatedTypeMirror upperBound = awt.getExtendsBound();
-            if (upperBound != null) {
-                substituteTVars(f, lhs, upperBound);
+            AnnotatedWildcardType awt = (AnnotatedWildcardType) rhs.shallowCopy();
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mapping = new HashMap<>();
+
+            AnnotatedTypeMirror extend = awt.getExtendsBound();
+            if (extend != null) {
+                AnnotatedTypeMirror substExtend = substituteTVars(f, lhs, extend);
+                mapping.put(extend, substExtend);
             }
 
-            AnnotatedTypeMirror lowerBound = awt.getSuperBound();
-            if (lowerBound != null) {
-                substituteTVars(f, lhs, lowerBound);
+            AnnotatedTypeMirror zuper = awt.getSuperBound();
+            if (zuper != null) {
+                AnnotatedTypeMirror substZuper = substituteTVars(f, lhs, zuper);
+                mapping.put(zuper, substZuper);
             }
+
+            rhs = AnnotatedTypeReplacer.replace(awt, mapping);
         } else if (rhs.getKind() == TypeKind.ARRAY) {
-            AnnotatedArrayType aat = (AnnotatedArrayType) rhs;
+            AnnotatedArrayType aat = (AnnotatedArrayType) rhs.shallowCopy();
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mapping = new HashMap<>();
+
             AnnotatedTypeMirror compnentType = aat.getComponentType();
             // Type variable of compnentType already gets substituted
-            substituteTVars(f, lhs, compnentType);
+            AnnotatedTypeMirror substCompnentType = substituteTVars(f, lhs, compnentType);
+            mapping.put(compnentType, substCompnentType);
+
+            // Construct result type
+            rhs = AnnotatedTypeReplacer.replace(aat, mapping);
         } else if (rhs.getKind().isPrimitive() || rhs.getKind() == TypeKind.NULL) {
             // nothing to do for primitive types and the null type
         } else {
@@ -220,6 +284,7 @@ public abstract class GenericVPUtil<T> {
 
     /**
      * Return actual type argument for formal type parameter "var" from 'type"
+     *
      * @param f AnnotatedTypeFactory of concrete type system
      * @param type type from which type arguments are extracted to replace "var"
      * @param var formal type parameter that needs real type arguments
@@ -251,6 +316,7 @@ public abstract class GenericVPUtil<T> {
 
     /**
      * Find the index(position) of this type variable from type
+     *
      * @param type type from which we infer actual type arguments
      * @param var formal type parameter
      * @return index(position) of this type variable from type
@@ -289,5 +355,9 @@ public abstract class GenericVPUtil<T> {
         }
 
         return Pair.of(type, foundindex);
+    }
+
+    public AnnotationMirror getAnnotation(AnnotatedTypeMirror atm, AnnotatedTypeFactory f) {
+        return getAnnotationFromModifier(getModifier(atm, f));
     }
 }
