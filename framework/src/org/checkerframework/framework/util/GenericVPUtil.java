@@ -17,6 +17,7 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedNullType
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedTypeVariable;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedWildcardType;
 import org.checkerframework.framework.type.AnnotatedTypeReplacer;
+import org.checkerframework.javacutil.ErrorReporter;
 import org.checkerframework.javacutil.Pair;
 
 /**
@@ -25,7 +26,8 @@ import org.checkerframework.javacutil.Pair;
  *
  * @author tamier
  * @author wmdietl
- * @param <T> AnnotationMirror(framework side) or Slot(inference side)
+ * @param <T> Represents type that we want to perform viewpoint adaptation on, i.e.
+ *     AnnotationMirror(framework side) or Slot(inference side)
  */
 public abstract class GenericVPUtil<T> {
 
@@ -63,6 +65,16 @@ public abstract class GenericVPUtil<T> {
      * @return AnnotationMirror extracted
      */
     protected abstract AnnotationMirror getAnnotationFromModifier(T t);
+
+    /**
+     * Retrieve AnnotationMirror from AnnotatedTypeMirror
+     * @param atm AnnotatedTypeMirror from which to extract AnnotationMirror
+     * @param f AnnotatedTypeFactory of concrete type system
+     * @return AnnotationMirror extracted
+     */
+    public final AnnotationMirror getAnnotationMirror(AnnotatedTypeMirror atm, AnnotatedTypeFactory f) {
+        return getAnnotationFromModifier(getModifier(atm, f));
+    }
 
     /**
      * Viewpoint Adapt decl to recv, and return the result atm
@@ -192,8 +204,9 @@ public abstract class GenericVPUtil<T> {
             ant.replaceAnnotation(getAnnotationFromModifier(result));
             return ant;
         } else {
-            System.err.println("Error: Unknown result.getKind(): " + decl.getKind());
-            assert false;
+            ErrorReporter.errorAbort(
+                    "GenericVPUtil::combineModifierWithType: Unknown result.getKind(): "
+                            + decl.getKind());
             return null;
         }
     }
@@ -271,12 +284,11 @@ public abstract class GenericVPUtil<T> {
         } else if (rhs.getKind().isPrimitive() || rhs.getKind() == TypeKind.NULL) {
             // nothing to do for primitive types and the null type
         } else {
-            System.out.println(
-                    "GUTQualifierUtils::substituteTVars: What should be done with: "
+            ErrorReporter.errorAbort(
+                    "GenericVPUtil::substituteTVars: What should be done with: "
                             + rhs
                             + " of kind: "
                             + rhs.getKind());
-            assert false;
         }
 
         return rhs;
@@ -355,9 +367,5 @@ public abstract class GenericVPUtil<T> {
         }
 
         return Pair.of(type, foundindex);
-    }
-
-    public AnnotationMirror getAnnotation(AnnotatedTypeMirror atm, AnnotatedTypeFactory f) {
-        return getAnnotationFromModifier(getModifier(atm, f));
     }
 }

@@ -310,7 +310,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     /** Mapping from an Element to the source Tree of the declaration. */
     private final Map<Element, Tree> elementToTreeCache;
 
-    /** viewpoint adaptation utility to perform viewpoint adaptation */
+    /** Viewpoint adaptation utility to perform viewpoint adaptation */
     protected final GenericVPUtil<?> vputil;
 
     /**
@@ -318,6 +318,11 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * 979.
      */
     public final boolean ignoreUninferredTypeArguments;
+
+     /** A boolean flag to indicate viewpoint adaptation is needed or not. If yes, {@link
+     * AnnotatedTypeFactory#vputil}} is used to perform viewpoint adaptation
+     */
+    private final boolean withViewpointAdaptation;
 
     /**
      * Constructs a factory from the given {@link ProcessingEnvironment} instance and syntax tree
@@ -367,7 +372,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         this.typeFormatter = createAnnotatedTypeFormatter();
         this.annotationFormatter = createAnnotationFormatter();
         this.vputil = createVPUtil();
-        this.withCombineConstraints = checker.withCombineConstraints();
+        this.withViewpointAdaptation = checker.withViewpointAdaptatioin();
 
         infer = checker.hasOption("infer");
         if (infer) {
@@ -903,8 +908,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     /** Mapping from a Tree to its TreePath */
     private final TreePathCacher treePathCache = new TreePathCacher();
 
-    private boolean withCombineConstraints;
-
     /**
      * Returns the int supplied to the checker via the atfCacheSize option or the default cache
      * size.
@@ -1322,18 +1325,27 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             addAnnotationFromFieldInvariant(type, owner, (VariableElement) element);
         }
         addComputedTypeAnnotations(element, type);
-        if (withCombineConstraints) {
+        if (withViewpointAdaptation) {
+            if (type.getKind() != TypeKind.DECLARED && type.getKind() != TypeKind.ARRAY) {
+                return;
+            }
+            if (element.getKind() == ElementKind.LOCAL_VARIABLE
+                    || element.getKind() == ElementKind.PARAMETER) {
+                return;
+            }
             AnnotatedTypeMirror decltype = this.fromElement(element);
             AnnotatedTypeMirror combinedType = vputil.combineTypeWithType(owner, decltype, this);
-            type.replaceAnnotation(vputil.getAnnotation(combinedType, this));
-            if (type.getKind() == TypeKind.DECLARED && combinedType.getKind() == TypeKind.DECLARED) {
-                AnnotatedDeclaredType Type = (AnnotatedDeclaredType) type;
-                AnnotatedDeclaredType CombinedType = (AnnotatedDeclaredType) combinedType;
-                Type.setTypeArguments(CombinedType.getTypeArguments());
-            } else if (type.getKind() == TypeKind.ARRAY && combinedType.getKind() == TypeKind.ARRAY) {
-                AnnotatedArrayType arrayType = (AnnotatedArrayType) type;
-                AnnotatedArrayType arrayCombinedType = (AnnotatedArrayType) combinedType;
-                arrayType.setComponentType(arrayCombinedType.getComponentType());
+            type.replaceAnnotation(vputil.getAnnotationMirror(combinedType, this));
+            if (type.getKind() == TypeKind.DECLARED
+                    && combinedType.getKind() == TypeKind.DECLARED) {
+                AnnotatedDeclaredType adtType = (AnnotatedDeclaredType) type;
+                AnnotatedDeclaredType adtCombinedType = (AnnotatedDeclaredType) combinedType;
+                adtType.setTypeArguments(adtCombinedType.getTypeArguments());
+            } else if (type.getKind() == TypeKind.ARRAY
+                    && combinedType.getKind() == TypeKind.ARRAY) {
+                AnnotatedArrayType aatType = (AnnotatedArrayType) type;
+                AnnotatedArrayType aatCombinedType = (AnnotatedArrayType) combinedType;
+                aatType.setComponentType(aatCombinedType.getComponentType());
             }
         }
     }
@@ -1518,12 +1530,12 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         for (AnnotatedTypeMirror atm : tvars) {
             AnnotatedTypeVariable atv = (AnnotatedTypeVariable) atm;
             AnnotatedTypeMirror upper = atv.getUpperBound();
-            if (withCombineConstraints) {
+            if (withViewpointAdaptation) {
                 upper = vputil.combineTypeWithType(type, upper, this);
             }
             upper = typeVarSubstitutor.substitute(mapping, upper);
             AnnotatedTypeMirror lower = atv.getLowerBound();
-            if (withCombineConstraints) {
+            if (withViewpointAdaptation) {
                 lower = vputil.combineTypeWithType(type, lower, this);
             }
             lower = typeVarSubstitutor.substitute(mapping, lower);
@@ -1998,7 +2010,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         AnnotatedExecutableType methodType =
                 AnnotatedTypes.asMemberOf(types, this, receiverType, methodElt);
 
-        if (withCombineConstraints) {
+        if (withViewpointAdaptation) {
             AnnotatedExecutableType declMethodType = this.fromElement(methodElt);
             this.addComputedTypeAnnotations(methodElt, declMethodType);
             AnnotatedTypeMirror returnType = declMethodType.getReturnType();
@@ -2007,23 +2019,29 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
             Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new HashMap<>();
 
-
             if (returnType.getKind() != TypeKind.VOID) {
                 AnnotatedTypeMirror r = vputil.combineTypeWithType(receiverType, returnType, this);
                 mappings.put(returnType, r);
             }
             for (AnnotatedTypeMirror parameterType : parameterTypes) {
-                AnnotatedTypeMirror p = vputil.combineTypeWithType(receiverType, parameterType, this);
+                AnnotatedTypeMirror p =
+                        vputil.combineTypeWithType(receiverType, parameterType, this);
                 mappings.put(parameterType, p);
             }
-            for (AnnotatedTypeVariable typeVariable: typeVariables) {
-                AnnotatedTypeMirror ub = vputil.combineTypeWithType(receiverType, typeVariable.getUpperBound(), this);
+            for (AnnotatedTypeVariable typeVariable : typeVariables) {
+                AnnotatedTypeMirror ub =
+                        vputil.combineTypeWithType(
+                                receiverType, typeVariable.getUpperBound(), this);
                 mappings.put(typeVariable.getUpperBound(), ub);
-                AnnotatedTypeMirror lb = vputil.combineTypeWithType(receiverType, typeVariable.getLowerBound(), this);
+                AnnotatedTypeMirror lb =
+                        vputil.combineTypeWithType(
+                                receiverType, typeVariable.getLowerBound(), this);
                 mappings.put(typeVariable.getLowerBound(), lb);
             }
 
-            declMethodType = (AnnotatedExecutableType) AnnotatedTypeReplacer.replace(declMethodType, mappings);
+            declMethodType =
+                    (AnnotatedExecutableType)
+                            AnnotatedTypeReplacer.replace(declMethodType, mappings);
 
             // Because we can't viewpoint adapt asMemberOf result, we adapt the declared method first, and sets the
             // corresponding parts to asMemberOf result
@@ -2158,7 +2176,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         List<AnnotatedTypeMirror> parameterTypes = con.getParameterTypes();
         List<AnnotatedTypeVariable> typeVariables = con.getTypeVariables();
 
-        if (withCombineConstraints) {
+        if (withViewpointAdaptation) {
             Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new HashMap<>();
             for (AnnotatedTypeMirror parameterType : parameterTypes) {
                 AnnotatedTypeMirror p = vputil.combineTypeWithType(type, parameterType, this);
@@ -3692,25 +3710,27 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         return checker;
     }
 
-    /** Method to reflectively set vputil. By default, this method gets the name of type system from
-    * the canonical name of "this", and concatenate it with "VPUtil". If the target class can be
-    * instantiated successfully, it's used. Otherwise, FrameworkVPUtil is returned. Note that
-    * FrameworkVPUtil deosn't perform any viewpoint adaptation function. It's only the base class
-    * for all VPUtil classes of concrete type system. If the concrete type system has a different
-    * naming mechanism, then developer of that type system should override this method to instantiate
-    * it correctly. Otherwise, FrameworkVPUtil is returned but NO viewpoint adaptation is performed.
-    * See {@link FrameworkVPUtil} for more information.
-    * @return GenericVPUtil newly created
-    */
-   protected GenericVPUtil<?> createVPUtil() {
-       // Reflectively lookup subclass of vputil using type factory naming convention
-       String clazzName =
-               this.getClass().getCanonicalName().replace("AnnotatedTypeFactory", "") + "VPUtil";
-       try {
-           return (GenericVPUtil<?>) Class.forName(clazzName).newInstance();
-       } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
-           // If didn't find or failed instantiation, use the default implementation
-           return new FrameworkVPUtil();
-       }
-   }
+    /**
+     * Factory method to reflectively set vputil. By default, this method gets the name of type
+     * system from the canonical name of "this", and concatenate it with "VPUtil". If the target
+     * class can be instantiated successfully, it's used. Otherwise, FrameworkVPUtil is returned.
+     * Note that FrameworkVPUtil doesn't perform any viewpoint adaptation function. It's only the
+     * base class for all VPUtil classes of concrete type system. If the concrete type system has a
+     * different naming mechanism, then developer of that type system should override this method to
+     * instantiate it correctly. Otherwise, FrameworkVPUtil is returned but NO viewpoint adaptation
+     * is performed. See {@link FrameworkVPUtil} for more information.
+     *
+     * @return GenericVPUtil newly created
+     */
+    protected GenericVPUtil<?> createVPUtil() {
+        // Reflectively lookup subclass of vputil using type factory naming convention
+        String clazzName =
+                this.getClass().getCanonicalName().replace("AnnotatedTypeFactory", "VPUtil");
+        try {
+            return (GenericVPUtil<?>) Class.forName(clazzName).newInstance();
+        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+            // If didn't find or failed instantiation, use the default implementation
+            return new FrameworkVPUtil();
+        }
+    }
 }
