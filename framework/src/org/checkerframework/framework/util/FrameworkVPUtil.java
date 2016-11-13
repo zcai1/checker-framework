@@ -14,7 +14,7 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror;
 public class FrameworkVPUtil extends GenericVPUtil<AnnotationMirror> {
 
     @Override
-    public AnnotationMirror getModifier(AnnotatedTypeMirror atm, AnnotatedTypeFactory f) {
+    protected AnnotationMirror getModifier(AnnotatedTypeMirror atm, AnnotatedTypeFactory f) {
         return atm.getAnnotations().iterator().hasNext()
                 ? atm.getAnnotations().iterator().next()
                 : null;
