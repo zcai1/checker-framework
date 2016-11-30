@@ -106,6 +106,7 @@ import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
 import org.checkerframework.framework.util.TreePathCacher;
+import org.checkerframework.framework.util.ViewpointAdaptor;
 import org.checkerframework.framework.util.typeinference.DefaultTypeArgumentInference;
 import org.checkerframework.framework.util.typeinference.TypeArgumentInference;
 import org.checkerframework.javacutil.AnnotationProvider;
@@ -310,8 +311,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     /** Mapping from an Element to the source Tree of the declaration. */
     private final Map<Element, Tree> elementToTreeCache;
 
-    /** Viewpoint adaptation utility to perform viewpoint adaptation */
-    protected final GenericVPUtil<?> vputil;
+    /** Viewpoint adaptor to perform viewpoint adaptation */
+    protected final ViewpointAdaptor<?> viewpointAdaptor;
 
     /**
      * Whether to ignore uninferred type arguments. This is a temporary flag to work around Issue
@@ -321,8 +322,16 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
      /** A boolean flag to indicate viewpoint adaptation is needed or not. If yes, {@link
      * AnnotatedTypeFactory#vputil}} is used to perform viewpoint adaptation
+     * A boolean flag to indicate {@link AnnotatedTypeFactory#viewpointAdaptor} is null or not.
+     * These are two things: type system claims to need viewpoint adaptation and {@link
+     * AnnotatedTypeFactory#viewpointAdaptor} is null or not. If type system claims to need
+     * viewpoint adaptation, but fails to provide valid concrete subclass implementation of {@link
+     * ViewpointAdaptor}, this filed is still set to false, and error aborts. If true, i.e.
+     * viewpointAdaptor is non-null, then {@link AnnotatedTypeFactory#viewpointAdaptor}} is used to
+     * perform viewpoint adaptation. In this way, we can ensure that
+     * withEffectiveViewpointAdaptation implies viewpointAdaptor is non-null
      */
-    private final boolean withViewpointAdaptation;
+    protected final boolean withEffectiveViewpointAdaptation;
 
     /**
      * Constructs a factory from the given {@link ProcessingEnvironment} instance and syntax tree
@@ -371,8 +380,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         this.typeFormatter = createAnnotatedTypeFormatter();
         this.annotationFormatter = createAnnotationFormatter();
-        this.vputil = createVPUtil();
-        this.withViewpointAdaptation = checker.withViewpointAdaptatioin();
+        this.viewpointAdaptor = createViewpointAdaptor(checker.withViewpointAdaptation());
+        this.withEffectiveViewpointAdaptation = this.viewpointAdaptor != null;
 
         infer = checker.hasOption("infer");
         if (infer) {
@@ -1325,17 +1334,14 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             addAnnotationFromFieldInvariant(type, owner, (VariableElement) element);
         }
         addComputedTypeAnnotations(element, type);
-        if (withViewpointAdaptation) {
-            if (type.getKind() != TypeKind.DECLARED && type.getKind() != TypeKind.ARRAY) {
-                return;
-            }
-            if (element.getKind() == ElementKind.LOCAL_VARIABLE
-                    || element.getKind() == ElementKind.PARAMETER) {
-                return;
-            }
-            AnnotatedTypeMirror decltype = this.fromElement(element);
-            AnnotatedTypeMirror combinedType = vputil.combineTypeWithType(owner, decltype, this);
-            type.replaceAnnotation(vputil.getAnnotationMirror(combinedType, this));
+        if (withEffectiveViewpointAdaptation) {
+            if (viewpointAdaptor.shouldNotBeAdapted(type, element)) return;
+            AnnotatedTypeMirror decltype = this.getAnnotatedType(element);
+            AnnotatedTypeMirror combinedType =
+                    this.viewpointAdaptor.combineTypeWithType(owner, decltype, this);
+            // TODO Remove this ugly code
+            // Update: we don't have a method to do this job. I think we need to add this logic.
+            type.replaceAnnotation(viewpointAdaptor.getAnnotationMirror(combinedType, this));
             if (type.getKind() == TypeKind.DECLARED
                     && combinedType.getKind() == TypeKind.DECLARED) {
                 AnnotatedDeclaredType adtType = (AnnotatedDeclaredType) type;
@@ -1530,13 +1536,13 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         for (AnnotatedTypeMirror atm : tvars) {
             AnnotatedTypeVariable atv = (AnnotatedTypeVariable) atm;
             AnnotatedTypeMirror upper = atv.getUpperBound();
-            if (withViewpointAdaptation) {
-                upper = vputil.combineTypeWithType(type, upper, this);
+            if (withEffectiveViewpointAdaptation) {
+                upper = viewpointAdaptor.combineTypeWithType(type, upper, this);
             }
             upper = typeVarSubstitutor.substitute(mapping, upper);
             AnnotatedTypeMirror lower = atv.getLowerBound();
-            if (withViewpointAdaptation) {
-                lower = vputil.combineTypeWithType(type, lower, this);
+            if (withEffectiveViewpointAdaptation) {
+                lower = viewpointAdaptor.combineTypeWithType(type, lower, this);
             }
             lower = typeVarSubstitutor.substitute(mapping, lower);
 
@@ -2010,9 +2016,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         AnnotatedExecutableType methodType =
                 AnnotatedTypes.asMemberOf(types, this, receiverType, methodElt);
 
-        if (withViewpointAdaptation) {
-            AnnotatedExecutableType declMethodType = this.fromElement(methodElt);
-            this.addComputedTypeAnnotations(methodElt, declMethodType);
+        if (withEffectiveViewpointAdaptation) {
+            AnnotatedExecutableType declMethodType = this.getAnnotatedType(methodElt);
             AnnotatedTypeMirror returnType = declMethodType.getReturnType();
             List<AnnotatedTypeMirror> parameterTypes = declMethodType.getParameterTypes();
             List<AnnotatedTypeVariable> typeVariables = declMethodType.getTypeVariables();
@@ -2020,21 +2025,22 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new HashMap<>();
 
             if (returnType.getKind() != TypeKind.VOID) {
-                AnnotatedTypeMirror r = vputil.combineTypeWithType(receiverType, returnType, this);
+                AnnotatedTypeMirror r =
+                        viewpointAdaptor.combineTypeWithType(receiverType, returnType, this);
                 mappings.put(returnType, r);
             }
             for (AnnotatedTypeMirror parameterType : parameterTypes) {
                 AnnotatedTypeMirror p =
-                        vputil.combineTypeWithType(receiverType, parameterType, this);
+                        viewpointAdaptor.combineTypeWithType(receiverType, parameterType, this);
                 mappings.put(parameterType, p);
             }
             for (AnnotatedTypeVariable typeVariable : typeVariables) {
                 AnnotatedTypeMirror ub =
-                        vputil.combineTypeWithType(
+                        viewpointAdaptor.combineTypeWithType(
                                 receiverType, typeVariable.getUpperBound(), this);
                 mappings.put(typeVariable.getUpperBound(), ub);
                 AnnotatedTypeMirror lb =
-                        vputil.combineTypeWithType(
+                        viewpointAdaptor.combineTypeWithType(
                                 receiverType, typeVariable.getLowerBound(), this);
                 mappings.put(typeVariable.getLowerBound(), lb);
             }
@@ -2176,14 +2182,16 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         List<AnnotatedTypeMirror> parameterTypes = con.getParameterTypes();
         List<AnnotatedTypeVariable> typeVariables = con.getTypeVariables();
 
-        if (withViewpointAdaptation) {
+        if (withEffectiveViewpointAdaptation) {
             Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new HashMap<>();
             for (AnnotatedTypeMirror parameterType : parameterTypes) {
-                AnnotatedTypeMirror p = vputil.combineTypeWithType(type, parameterType, this);
+                AnnotatedTypeMirror p =
+                        viewpointAdaptor.combineTypeWithType(type, parameterType, this);
                 mappings.put(parameterType, p);
             }
             for (AnnotatedTypeMirror typeVariable : typeVariables) {
-                AnnotatedTypeMirror tv = vputil.combineTypeWithType(type, typeVariable, this);
+                AnnotatedTypeMirror tv =
+                        viewpointAdaptor.combineTypeWithType(type, typeVariable, this);
                 mappings.put(typeVariable, tv);
             }
             con = (AnnotatedExecutableType) AnnotatedTypeReplacer.replace(con, mappings);
@@ -3711,26 +3719,30 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     }
 
     /**
-     * Factory method to reflectively set vputil. By default, this method gets the name of type
-     * system from the canonical name of "this", and concatenate it with "VPUtil". If the target
-     * class can be instantiated successfully, it's used. Otherwise, FrameworkVPUtil is returned.
-     * Note that FrameworkVPUtil doesn't perform any viewpoint adaptation function. It's only the
-     * base class for all VPUtil classes of concrete type system. If the concrete type system has a
-     * different naming mechanism, then developer of that type system should override this method to
-     * instantiate it correctly. Otherwise, FrameworkVPUtil is returned but NO viewpoint adaptation
-     * is performed. See {@link FrameworkVPUtil} for more information.
+     * Factory method to reflectively set {@link AnnotatedTypeFactory#viewpointAdaptor}. By default,
+     * this method gets the name of type system from the canonical name of "this", and concatenate
+     * it with "ViewpointAdaptor". If the concrete type system has a different naming mechanism,
+     * then developer of that type system should override this method to instantiate it correctly.
+     * If the target class can be instantiated successfully, it's used. Otherwise, internal error is
+     * triggered and will be error aborted.
      *
-     * @return GenericVPUtil newly created
+     * @return ViewpointAdaptor newly created
      */
-    protected GenericVPUtil<?> createVPUtil() {
-        // Reflectively lookup subclass of vputil using type factory naming convention
+    protected ViewpointAdaptor<?> createViewpointAdaptor(
+            boolean claimsToEnableViewpointAdaptation) {
+        if (!claimsToEnableViewpointAdaptation) return null;
+        // Reflectively lookup subclass of {@link ViewpointAdaptor} using type factory naming convention
         String clazzName =
-                this.getClass().getCanonicalName().replace("AnnotatedTypeFactory", "VPUtil");
+                this.getClass()
+                        .getCanonicalName()
+                        .replace("AnnotatedTypeFactory", "ViewpointAdaptor");
         try {
-            return (GenericVPUtil<?>) Class.forName(clazzName).newInstance();
+            // Tries to instantiate that viewpoint adaptor
+            return (ViewpointAdaptor<?>) Class.forName(clazzName).newInstance();
         } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
-            // If didn't find or failed instantiation, use the default implementation
-            return new FrameworkVPUtil();
+            // If didn't find or failed to instantiate, error abort.
+            checker.errorAbort("Failed to instantiate " + clazzName + " !");
+            return null;
         }
     }
 }

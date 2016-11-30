@@ -692,12 +692,12 @@ public abstract class BaseTypeChecker extends SourceChecker implements BaseTypeC
 
     /**
      * This method indicates whether a type system needs viewpoint adaptation or not. Be default,
-     * returns false, meaning no need to perform viewpoint adaptation. Subclass of this class should
-     * override this method to return true if they need that.
+     * returns false, meaning no need to perform viewpoint adaptation. Subclasses of this class
+     * should override this method to return true if they need that.
      *
      * @return true if viewpoint adaptation is needed
      */
-    public boolean withViewpointAdaptatioin() {
+    public boolean withViewpointAdaptation() {
         return false;
     }
 }
