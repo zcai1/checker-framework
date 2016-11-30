@@ -21,15 +21,16 @@ import org.checkerframework.javacutil.ErrorReporter;
 import org.checkerframework.javacutil.Pair;
 
 /**
- * Generic version of VPUtil. It has two major clients: one is on framework side, the other is on
- * inference side. See {@link FrameworkVPUtil} for more information.
+ * Utility class to perform viewpoint adaptation. It has two major clients: one is on framework
+ * side, the other is on inference side. See framework side implementation {@link
+ * FrameworkViewpointAdaptor} for more information.
  *
  * @author tamier
  * @author wmdietl
  * @param <T> Represents type that we want to perform viewpoint adaptation on, i.e.
  *     AnnotationMirror(framework side) or Slot(inference side)
  */
-public abstract class GenericVPUtil<T> {
+public abstract class ViewpointAdaptor<T> {
 
     // This prevents calling combineTypeWithType on type variable if it is a bound of another type variable.
     // We only process one level. TODO: why we need this mechanism?
@@ -68,12 +69,25 @@ public abstract class GenericVPUtil<T> {
 
     /**
      * Retrieve AnnotationMirror from AnnotatedTypeMirror
+     *
      * @param atm AnnotatedTypeMirror from which to extract AnnotationMirror
      * @param f AnnotatedTypeFactory of concrete type system
      * @return AnnotationMirror extracted
      */
-    public final AnnotationMirror getAnnotationMirror(AnnotatedTypeMirror atm, AnnotatedTypeFactory f) {
+    public final AnnotationMirror getAnnotationMirror(
+            AnnotatedTypeMirror atm, AnnotatedTypeFactory f) {
         return getAnnotationFromModifier(getModifier(atm, f));
+    }
+
+    /**
+     * Determines in which case type should not be viewpoint adapted.
+     *
+     * @param type type of the element after AnnotatedTypes#asMemberOfImpl
+     * @param element element whose type is being considered to be adapted or not
+     * @return true if type or element should not be adapted.
+     */
+    public boolean shouldNotBeAdapted(AnnotatedTypeMirror type, Element element) {
+        return false;
     }
 
     /**
@@ -196,7 +210,7 @@ public abstract class GenericVPUtil<T> {
 
             AnnotatedTypeMirror result = AnnotatedTypeReplacer.replace(awt, mapping);
 
-            return awt;
+            return result;
         } else if (decl.getKind() == TypeKind.NULL) {
             AnnotatedNullType ant = (AnnotatedNullType) decl.shallowCopy(true);
             T declModifier = getModifier(ant, f);
@@ -205,7 +219,9 @@ public abstract class GenericVPUtil<T> {
             return ant;
         } else {
             ErrorReporter.errorAbort(
-                    "GenericVPUtil::combineModifierWithType: Unknown result.getKind(): "
+                    "ViewpointAdaptor::combineModifierWithType: Unknown decl: "
+                            + decl
+                            + " of kind: "
                             + decl.getKind());
             return null;
         }
@@ -214,13 +230,14 @@ public abstract class GenericVPUtil<T> {
     /**
      * If rhs is type variable use whose type arguments should be inferred from receiver - lhs, this
      * method substitutes that type argument into rhs, and return the reference to rhs. So, this
-     * method is not side effect free, i.e., rhs will be modified after the method returns.
+     * method is side effect free, i.e., rhs will be copied and that copy gets modified and
+     * returned.
      *
      * @param f AnnotatedTypeFactory of concrete type system
      * @param lhs type from which type arguments are extracted to replace formal type parameters of
      *     rhs.
      * @param rhs AnnotatedTypeMirror that might be a formal type parameter
-     * @return rhs with its type parameter substituted
+     * @return rhs' copy with its type parameter substituted
      */
     private AnnotatedTypeMirror substituteTVars(
             AnnotatedTypeFactory f, AnnotatedTypeMirror lhs, AnnotatedTypeMirror rhs) {
@@ -285,7 +302,7 @@ public abstract class GenericVPUtil<T> {
             // nothing to do for primitive types and the null type
         } else {
             ErrorReporter.errorAbort(
-                    "GenericVPUtil::substituteTVars: What should be done with: "
+                    "ViewpointAdaptor::substituteTVars: Cannot handle rhs: "
                             + rhs
                             + " of kind: "
                             + rhs.getKind());
@@ -343,11 +360,7 @@ public abstract class GenericVPUtil<T> {
         int foundindex = 0;
 
         for (TypeParameterElement tparam : tparams) {
-            if (tparam.equals(varelem)
-                    ||
-                    //TODO: comparing by name!!!???
-                    // Sometimes "E" and "E extends Object" are compared, which do not match by "equals".
-                    tparam.getSimpleName().equals(varelem.getSimpleName())) {
+            if (tparam.equals(varelem) || tparam.getSimpleName().equals(varelem.getSimpleName())) {
                 // we found the right index!
                 break;
             }
@@ -355,14 +368,14 @@ public abstract class GenericVPUtil<T> {
         }
 
         if (foundindex >= tparams.size()) {
-            // didn't find the desired type :-( => Head for super type of "type"!
+            // Didn't find the desired type => Head for super type of "type"!
             for (AnnotatedDeclaredType sup : type.directSuperTypes()) {
                 Pair<AnnotatedDeclaredType, Integer> res = findDeclType(sup, var);
                 if (res != null) {
                     return res;
                 }
             }
-            // we reach this point if the variable wasn't found in any recursive call on ALL direct supertypes.
+            // We reach this point if the variable wasn't found in any recursive call on ALL direct supertypes.
             return null;
         }
 
