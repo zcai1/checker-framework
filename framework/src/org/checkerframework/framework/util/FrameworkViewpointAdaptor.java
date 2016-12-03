@@ -10,8 +10,8 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror;
  * AnnotatedTypeFactory)} and {@link ViewpointAdaptor#combineModifierWithModifier(Object, Object,
  * AnnotatedTypeFactory)}to perform type system specific viewpoint adaptation. Depending on type
  * system, one might also wants to override {@link
- * ViewpointAdaptor#shouldNotBeAdapted(AnnotatedTypeMirror, javax.lang.model.element.Element)} to
- * specify which types or elements should not be adapted.
+ * ViewpointAdaptor#shouldBeAdapted(AnnotatedTypeMirror, javax.lang.model.element.Element)} to
+ * specify maybe only a set of types or elements should be adapted.
  *
  * @author tamier
  */
