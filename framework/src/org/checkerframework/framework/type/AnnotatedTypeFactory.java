@@ -100,8 +100,6 @@ import org.checkerframework.framework.util.AnnotationFormatter;
 import org.checkerframework.framework.util.CFContext;
 import org.checkerframework.framework.util.DefaultAnnotationFormatter;
 import org.checkerframework.framework.util.FieldInvariants;
-import org.checkerframework.framework.util.FrameworkVPUtil;
-import org.checkerframework.framework.util.GenericVPUtil;
 import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
@@ -1334,8 +1332,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             addAnnotationFromFieldInvariant(type, owner, (VariableElement) element);
         }
         addComputedTypeAnnotations(element, type);
-        if (withEffectiveViewpointAdaptation) {
-            if (viewpointAdaptor.shouldNotBeAdapted(type, element)) return;
+        if (withEffectiveViewpointAdaptation && viewpointAdaptor.shouldBeAdapted(type, element)) {
             AnnotatedTypeMirror decltype = this.getAnnotatedType(element);
             AnnotatedTypeMirror combinedType =
                     this.viewpointAdaptor.combineTypeWithType(owner, decltype, this);

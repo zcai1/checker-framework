@@ -86,8 +86,8 @@ public abstract class ViewpointAdaptor<T> {
      * @param element element whose type is being considered to be adapted or not
      * @return true if type or element should not be adapted.
      */
-    public boolean shouldNotBeAdapted(AnnotatedTypeMirror type, Element element) {
-        return false;
+    public boolean shouldBeAdapted(AnnotatedTypeMirror type, Element element) {
+        return true;
     }
 
     /**
