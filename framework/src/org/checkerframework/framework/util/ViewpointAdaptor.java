@@ -33,7 +33,7 @@ import org.checkerframework.javacutil.Pair;
 public abstract class ViewpointAdaptor<T> {
 
     // This prevents calling combineTypeWithType on type variable if it is a bound of another type variable.
-    // We only process one level. TODO: why we need this mechanism?
+    // We only process one level.
     protected boolean isTypeVarExtends = false;
 
     /**
@@ -50,7 +50,7 @@ public abstract class ViewpointAdaptor<T> {
             T recvModifier, T declModifier, AnnotatedTypeFactory f);
 
     /**
-     * Extract modifier from AnnotatedTypeMirror. On framework side, we extract AnnotationMiror; On
+     * Extract modifier from AnnotatedTypeMirror. On framework side, we extract AnnotationMirror; On
      * inference side, we extract slot.
      *
      * @param atm AnnotatedTypeMirror from which modifier is going to be extracted
@@ -249,7 +249,6 @@ public abstract class ViewpointAdaptor<T> {
                 rhs = getTypeVariableSubstitution(f, (AnnotatedDeclaredType) lhs, atv);
             }
             // else TODO: the receiver might be another type variable... should we do something?
-            // TODO: does that really happen?
         } else if (rhs.getKind() == TypeKind.DECLARED) {
             //System.out.println("before: " + rhs);
             AnnotatedDeclaredType adt = (AnnotatedDeclaredType) rhs.shallowCopy();
@@ -258,14 +257,8 @@ public abstract class ViewpointAdaptor<T> {
             for (AnnotatedTypeMirror formalTypeParameter : adt.getTypeArguments()) {
                 AnnotatedTypeMirror actualTypeArgument =
                         substituteTVars(f, lhs, formalTypeParameter);
-                //System.out.println("actual type argument: " + actualTypeArgument);
                 mapping.put(formalTypeParameter, actualTypeArgument);
                 // The following code does the wrong thing!
-                /*T modifier = getModifier(actualTypeArgument, f);
-                System.out.println("modifier: " + modifier);
-                // Formally replace formal type parameter with actual type argument
-                System.out.println("am: " + getAnnotationFromModifier(modifier));
-                formalTypeArgument.replaceAnnotation(getAnnotationFromModifier(modifier));*/
             }
             // We must use AnnotatedTypeReplacer to replace the formal type parameters with actual type
             // arguments, but not replace with its main modifier
@@ -333,12 +326,10 @@ public abstract class ViewpointAdaptor<T> {
         if (!decltype.wasRaw()) {
             // Explicitly provide actual type arguments
             List<AnnotatedTypeMirror> tas = decltype.getTypeArguments();
-            // CAREFUL: return a copy, as we want to modify the type later.
-            // TODO what's the difference for AnnotatedTypeReplacer?
+            // return a copy, as we want to modify the type later.
             return tas.get(foundindex).shallowCopy(true);
         } else {
             // Type arguments not explicitly provided => use upper bound of var
-            // TODO why?
             return var.getUpperBound();
         }
     }

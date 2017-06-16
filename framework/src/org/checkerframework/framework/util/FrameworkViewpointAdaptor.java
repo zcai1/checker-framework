@@ -1,17 +1,9 @@
 package org.checkerframework.framework.util;
 
 import javax.lang.model.element.AnnotationMirror;
-import org.checkerframework.framework.type.AnnotatedTypeFactory;
-import org.checkerframework.framework.type.AnnotatedTypeMirror;
 
 /**
- * Base class for viewpoint adaptation on framework side. Subclass should extend this class and
- * provide implementations for {@link ViewpointAdaptor#getModifier(AnnotatedTypeMirror,
- * AnnotatedTypeFactory)} and {@link ViewpointAdaptor#combineModifierWithModifier(Object, Object,
- * AnnotatedTypeFactory)}to perform type system specific viewpoint adaptation. Depending on type
- * system, one might also wants to override {@link
- * ViewpointAdaptor#shouldBeAdapted(AnnotatedTypeMirror, javax.lang.model.element.Element)} to
- * specify maybe only a set of types or elements should be adapted.
+ * Base class for viewpoint adaptation on framework side.
  *
  * @author tamier
  */
