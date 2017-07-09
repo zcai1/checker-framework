@@ -508,6 +508,13 @@
         </antcall>
     </target>
 
+    <target name="qualifiedlocations-tests" depends="jar,build-tests"
+            description="Run tests for the QualifiedLocations Checker ">
+        <antcall target="-run-tests">
+            <param name="param" value="tests.QualifiedLocationsTest"/>
+        </antcall>
+    </target>
+
     <target name="reflection-tests" depends="jar,build-tests"
             description="Run tests for reflection resolution">
         <antcall target="-run-tests">

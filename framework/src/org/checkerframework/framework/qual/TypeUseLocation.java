@@ -81,20 +81,14 @@ public enum TypeUseLocation {
      */
     IMPLICIT_UPPER_BOUND,
 
-    /**
-     * Apply default annotations to unannotated type declarations:
-     * {@code @HERE class Demo{}}
-     */
+    /** Apply default annotations to unannotated type declarations: {@code @HERE class Demo{}} */
     TYPE_DECLARATION,
     /**
-     * Represents type argument location in parameterized type
-     * {@code List<@TA1 ArrayList<@TA2 String>>}
+     * Represents type argument location in parameterized type {@code List<@TA1 ArrayList<@TA2
+     * String>>}
      */
     TYPE_ARGUMENT,
-    /**
-     * Represents array component location
-     * {@code @AC2 String [] @AC1 []}
-     */
+    /** Represents array component location {@code @AC2 String [] @AC1 []} */
     ARRAY_COMPONENT,
 
     /**
@@ -113,10 +107,7 @@ public enum TypeUseLocation {
 
     CAST,
 
-    /**
-     * Apply if nothing more concrete is provided.
-     * TODO: clarify relation to ALL.
-     */
+    /** Apply if nothing more concrete is provided. TODO: clarify relation to ALL. */
     OTHERWISE,
 
     /**

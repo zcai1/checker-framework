@@ -5,40 +5,19 @@ import org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey;
 */
 
 import com.sun.source.tree.AnnotatedTypeTree;
-import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
-import com.sun.source.tree.InstanceOfTree;
-import com.sun.source.tree.MemberSelectTree;
-import com.sun.source.tree.MethodInvocationTree;
-import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.ParameterizedTypeTree;
-import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
-import com.sun.source.tree.TypeCastTree;
-import com.sun.source.tree.TypeParameterTree;
 import com.sun.source.tree.VariableTree;
-import com.sun.source.util.TreePath;
-import com.sun.tools.javac.code.Type.WildcardType;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.type.TypeKind;
-import org.checkerframework.framework.qual.DefaultQualifier;
-import org.checkerframework.framework.qual.DefaultQualifiers;
 import org.checkerframework.framework.qual.PolyAll;
-import org.checkerframework.framework.qual.TargetLocations;
 import org.checkerframework.framework.qual.TypeUseLocation;
 import org.checkerframework.framework.source.Result;
 import org.checkerframework.framework.type.AnnotatedTypeFactory;
@@ -56,9 +35,7 @@ import org.checkerframework.framework.util.AnnotatedTypes;
 import org.checkerframework.framework.util.BoundType;
 import org.checkerframework.framework.util.BoundTypeUtil;
 import org.checkerframework.javacutil.AnnotationUtils;
-import org.checkerframework.javacutil.CollectionUtils;
 import org.checkerframework.javacutil.ErrorReporter;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.Pair;
 import org.checkerframework.javacutil.TreeUtils;
 
@@ -69,7 +46,7 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
     protected final BaseTypeChecker checker;
     protected final BaseTypeVisitor<?> visitor;
     protected final AnnotatedTypeFactory atypeFactory;
-    protected final TargetLocationValidator locationValidator;
+
     // TODO: clean up coupling between components
     public BaseTypeValidator(
             BaseTypeChecker checker,
@@ -78,7 +55,6 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
         this.checker = checker;
         this.visitor = visitor;
         this.atypeFactory = atypeFactory;
-        locationValidator = new TargetLocationValidator(this);
     }
 
     /**
@@ -95,10 +71,6 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
     public boolean isValid(AnnotatedTypeMirror type, Tree tree) {
         this.isValid = true;
         visit(type, tree);
-        // TODO doesn't passin class tree!!!
-        //System.out.println("Tree " + tree + " is being checked:");
-        //System.out.println("\nEntry: type: " + type + " kind: " + type.getKind() + "\n");
-        locationValidator.validate(type, tree);
         return this.isValid;
     }
 
@@ -228,6 +200,10 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
                     : "size mismatch for type arguments: " + type + " and " + typeArgTree;
 
             for (int i = 0; i < tatypes.size(); ++i) {
+                visitor.checkQualifiedLocation(
+                        tatypes.get(i),
+                        typeArgTree.getTypeArguments().get(i),
+                        TypeUseLocation.TYPE_ARGUMENT);
                 scan(tatypes.get(i), typeArgTree.getTypeArguments().get(i));
             }
         }
@@ -329,6 +305,7 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
         AnnotatedTypeMirror comp = type;
         do {
             comp = ((AnnotatedArrayType) comp).getComponentType();
+            visitor.checkQualifiedLocation(comp, tree, TypeUseLocation.ARRAY_COMPONENT);
         } while (comp.getKind() == TypeKind.ARRAY);
 
         if (comp.getKind() == TypeKind.DECLARED
@@ -385,6 +362,11 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
             reportInvalidBounds(type, tree);
         }
 
+        if (type.isDeclaration() && tree.getKind() == Kind.TYPE_PARAMETER) {
+            validateQualifiedLocationsOnBounds(
+                    type, type.getUpperBound(), type.getLowerBound(), tree);
+        }
+
         // Keep in sync with visitWildcard
         Set<AnnotationMirror> onVar = type.getAnnotations();
         if (!onVar.isEmpty()) {
@@ -435,6 +417,9 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
         if (!areBoundsValid(type.getExtendsBound(), type.getSuperBound())) {
             reportInvalidBounds(type, tree);
         }
+
+        validateQualifiedLocationsOnBounds(
+                type, type.getExtendsBound(), type.getSuperBound(), tree);
 
         // Keep in sync with visitTypeVariable
         Set<AnnotationMirror> onVar = type.getAnnotations();
@@ -511,6 +496,54 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
     }
 
     /**
+     * Visit the bounds of a type variable or a wildcard and potentially apply qual to those bounds.
+     * This method will also update the boundType, isLowerBound, and isUpperbound fields.
+     */
+    protected void validateQualifiedLocationsOnBounds(
+            AnnotatedTypeMirror boundedType,
+            AnnotatedTypeMirror upperBound,
+            AnnotatedTypeMirror lowerBound,
+            Tree p) {
+
+        BoundType boundType = BoundTypeUtil.getBoundType(boundedType, atypeFactory);
+        // TODO Is this correct to use this as condition to check if it's type parameter declaration
+
+        // We only need to validate explicit main annotation on lower/upper bounds. So no need to
+        // visit recursively. They will be scan afterwards in different trees from which the deeper
+        // types can be validated
+        //scanAndReduce(upperBound, p, null);
+        // Checking upper bound
+        //if (p.getKind() == Tree.Kind.TYPE_PARAMETER) {
+        if (boundType.isOneOf(BoundType.UPPER)) {
+            //Explicit upper bound
+            visitor.checkQualifiedLocation(upperBound, p, TypeUseLocation.EXPLICIT_UPPER_BOUND);
+        } else if (boundType.isOneOf(BoundType.UNBOUND, BoundType.LOWER, BoundType.UNKNOWN)) {
+            // Implicit upper bound => Do nothing
+            visitor.checkQualifiedLocation(upperBound, p, TypeUseLocation.IMPLICIT_UPPER_BOUND);
+        } else {
+            // Upper bound
+            visitor.checkQualifiedLocation(upperBound, p, TypeUseLocation.UPPER_BOUND);
+        }
+        //}
+
+        // We only need to validate explicit main annotation on lower/upper bounds. So no need to
+        // visit recursively. They will be scan afterwards in different trees
+        //scanAndReduce(lowerBound, p, null);
+        // Checking lower bound
+        //if (p.getKind() == Tree.Kind.TYPE_PARAMETER) {
+        if (boundType.isOneOf(BoundType.LOWER)) {
+            // Explicit lower bound
+            visitor.checkQualifiedLocation(lowerBound, p, TypeUseLocation.EXPLICIT_LOWER_BOUND);
+        } else if (boundType.isOneOf(BoundType.UNBOUND, BoundType.UPPER, BoundType.UNKNOWN)) {
+            // Implicit lower bound
+            visitor.checkQualifiedLocation(lowerBound, p, TypeUseLocation.IMPLICIT_LOWER_BOUND);
+        } else {
+            visitor.checkQualifiedLocation(lowerBound, p, TypeUseLocation.LOWER_BOUND);
+        }
+        //}
+    }
+
+    /**
      * Determines if there are multiple qualifiers from a single hierarchy in type's primary
      * annotations. If so, report an error.
      *
@@ -534,369 +567,5 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
         }
 
         return error;
-    }
-}
-
-class TargetLocationValidator extends AnnotatedTypeScanner<Void, Tree> {
-
-    BaseTypeValidator validator;
-    private boolean printDebug = false;
-    int countEntry = 0;
-    private int countScan = 0;
-
-    TargetLocationValidator(BaseTypeValidator validator) {
-        this.validator = validator;
-    }
-
-    void validate(AnnotatedTypeMirror type, Tree tree) {
-        if (printDebug) {
-            System.out.println(
-                    "\n\n##################### ["
-                            + countEntry++
-                            + "] Entry: type: "
-                            + type
-                            + " kind: "
-                            + type.getKind()
-                            + " tree: "
-                            + tree
-                            + " treeKinid: "
-                            + tree.getKind());
-        }
-        // scan is different from visit on not reseting first(reset includes cleaning the visitedNodes map, even though if
-        // we use IdentityHashMap, it didn't act like an effective cache.)
-        validateMainModifier(type, tree);
-        scan(type, tree);
-    };
-
-    private void validateMainModifier(AnnotatedTypeMirror type, Tree tree) {
-        Kind treeKind = tree.getKind();
-        // Cases where only tree is enough to determine its TypeUseLocation
-        boolean treeIsEnough = false;
-        switch (treeKind) {
-                //Additional handling for variable tree initializer
-                /*case VARIABLE:
-                Tree initializerTree = ((VariableTree)tree).getInitializer();
-                if(initializerTree != null){
-                    AnnotatedTypeMirror initializerType = this.validator.atypeFactory.getAnnotatedType(initializerTree);
-                    validateMainModifier(initializerType, initializerTree);
-                }
-                // treeIsEnough remains false => need additional checks for main modifier
-                break;*/
-                //Additional handling for method tree throw tree
-            case METHOD:
-                List<? extends ExpressionTree> throwTrees = ((MethodTree) tree).getThrows();
-                for (Tree throwTree : throwTrees) {
-                    AnnotatedTypeMirror throwType =
-                            this.validator.atypeFactory.getAnnotatedType(throwTree);
-                    checkValidLocation(throwType, throwTree, TypeUseLocation.THROWS);
-                }
-                break;
-                // We don't validate throw tree separately. Instead, we do it in MethodTree
-                /*case THROW:
-                Tree throwTree = ((ThrowTree)tree).getExpression();
-                AnnotatedTypeMirror throwType = this.validator.atypeFactory.getAnnotatedType(throwTree);
-                checkValidLocation(throwType, throwTree, TypeUseLocation.THROWS);
-                treeIsEnough = true;
-                break;*/
-            case INSTANCE_OF:
-                Tree typeTree = ((InstanceOfTree) tree).getType();
-                AnnotatedTypeMirror instanceOfType =
-                        this.validator.atypeFactory.getAnnotatedType(typeTree);
-                checkValidLocation(instanceOfType, typeTree, TypeUseLocation.INSTANCEOF);
-                treeIsEnough = true;
-                break;
-            case NEW_CLASS:
-                //if(printDebug) System.out.println("Examining new class tree type : " + type);
-                checkValidLocation(type, tree, TypeUseLocation.NEW);
-                treeIsEnough = true;
-                break;
-            case TYPE_CAST:
-                Tree castTree = ((TypeCastTree) tree).getType();
-                AnnotatedTypeMirror castType =
-                        this.validator.atypeFactory.getAnnotatedType(castTree);
-                checkValidLocation(castType, castTree, TypeUseLocation.CAST);
-                treeIsEnough = true;
-                break;
-                // Don't need this, because if there is overriding annotation, they will be treated like normal annotated type,
-                // which might be in top level or recursive deep levels(array component or type argument)
-                /*case TYPE_PARAMETER:
-                checkValidLocation(type, tree, TypeUseLocation.TYPE_PARAMETER_OVERRIDE);
-                break;*/
-            default:
-                break;
-        }
-        if (treeIsEnough) return;
-        // If tree can't be used to determine the TypeUseLocation, use the Element, but only with a specific set of Trees:
-        // namely, VariableTree, MethodTree, ClassTree
-        Element elt = getElement(tree);
-        // Skip trees we don't want to validate explicit annotation
-        if (elt == null) return;
-        ElementKind elementKind = elt.getKind();
-        switch (elementKind) {
-            case FIELD:
-                // Actual location IS Field! Need to check TypeUseLocation.FIELD is
-                //inside declared TypeUseLocation of the annotations on this element
-                checkValidLocation(type, tree, TypeUseLocation.FIELD);
-                break;
-            case LOCAL_VARIABLE:
-                checkValidLocation(type, tree, TypeUseLocation.LOCAL_VARIABLE);
-                break;
-            case RESOURCE_VARIABLE:
-                checkValidLocation(type, tree, TypeUseLocation.RESOURCE_VARIABLE);
-                break;
-            case EXCEPTION_PARAMETER:
-                checkValidLocation(type, tree, TypeUseLocation.EXCEPTION_PARAMETER);
-                break;
-            case PARAMETER:
-                // TODO method receiver and return type
-                if (elt.getSimpleName().contentEquals("this")) {
-                    checkValidLocation(type, tree, TypeUseLocation.RECEIVER);
-                } else {
-                    checkValidLocation(type, tree, TypeUseLocation.PARAMETER);
-                }
-                break;
-            case CONSTRUCTOR:
-            case METHOD:
-                // Upper bound of type parameter declared in generic method after getting
-                // nearest enclosing element is also METHOD element. BUT its tree is no
-                // method tree. So, we add additional restriction: only when the tree is also
-                // method tree, they use is seen to be on method return.
-                if (tree.getKind() == Tree.Kind.METHOD) {
-                    checkValidLocation(type, tree, TypeUseLocation.RETURN);
-                }
-                break;
-            case CLASS:
-            case INTERFACE:
-            case ANNOTATION_TYPE:
-            case ENUM:
-                // Not covered since type validator doesn't pass in class tree and a type to validate
-                //System.out.println("@@@tree: " + p);
-                // TODO validate class tree also in BaseTypeVisitor
-                //TODO: we get CLASS element kind for both type parameter tree and annotated type tree.
-                // The two tress are correct, and consistent with type. BUT, the Element gotton from tree
-                // has errors. And we use Element to process each location checking, so there are false
-                // warnings. Originally, these four cases are not supported, so didn't encountered this problem
-                // Update: this isClassTree if statement is basically because for upper bounds trees, it will
-                // extract class_name as element, and its kind is type_declaration. The major reason is that:
-                // getElement() methods returns wrong element for like List<String> as Locations. So, we need
-                // to make sure we are using class trees, to ensure that we are really at type declaration position.
-                if (TreeUtils.isClassTree(tree)) {
-                    checkValidLocation(type, tree, TypeUseLocation.TYPE_DECLARATION);
-                }
-                break;
-            default:
-                break;
-        }
-    }
-
-    private Element getElement(Tree tree) {
-        Element elt;
-        switch (tree.getKind()) {
-            case VARIABLE:
-                elt = TreeUtils.elementFromDeclaration((VariableTree) tree);
-                break;
-            case METHOD:
-                elt = TreeUtils.elementFromDeclaration((MethodTree) tree);
-                break;
-            case CLASS:
-            case ENUM:
-            case INTERFACE:
-            case ANNOTATION_TYPE:
-                elt = TreeUtils.elementFromDeclaration((ClassTree) tree);
-                break;
-            default:
-                // We don't care about other trees, since they trees other than the above don't need Element to determine its
-                // location/ these trees don't contains a top level main modifier, thus no need to validate
-                elt = null;
-                break;
-        }
-        return elt;
-    }
-
-    private void checkValidLocation(AnnotatedTypeMirror type, Tree tree, TypeUseLocation location) {
-        for (AnnotationMirror am : type.getAnnotations()) {
-            Element elementOfAnnotation = am.getAnnotationType().asElement();
-            TargetLocations declLocations =
-                    elementOfAnnotation.getAnnotation(TargetLocations.class);
-            // Null means no TargetLocations specified => Any use is correct.
-            if (declLocations != null) {
-                Set<TypeUseLocation> set = new HashSet<>(Arrays.asList(declLocations.value()));
-                if (set.contains(TypeUseLocation.ALL)) continue;
-                if (((location == TypeUseLocation.EXPLICIT_LOWER_BOUND)
-                                || (location == TypeUseLocation.IMPLICIT_LOWER_BOUND))
-                        && set.contains(TypeUseLocation.LOWER_BOUND)) {
-                    // TypeUseLocation.LOWER_BOUND already covers both explicit and implicit lower bounds, so no need to check containment
-                    continue;
-                } else if (((location == TypeUseLocation.EXPLICIT_UPPER_BOUND)
-                                || (location == TypeUseLocation.IMPLICIT_UPPER_BOUND))
-                        && set.contains(TypeUseLocation.UPPER_BOUND)) {
-                    // TypeUseLocation.UPPER_BOUND already covers both explicit and implicit lower bounds, so no need to check containment
-                    continue;
-                } else if (!set.contains(location)) reportLocationError(type, tree, location);
-            }
-        }
-    }
-
-    private void reportLocationError(
-            AnnotatedTypeMirror type, Tree tree, TypeUseLocation location) {
-        if (printDebug) {
-            System.out.println(
-                    "\n-----!!!----- Error =>  type: "
-                            + type
-                            + " \ntree: "
-                            + tree
-                            + " location: "
-                            + location.toString().toLowerCase());
-        }
-        // TODO check the effect of removing cache for type and tree while reporting error
-        validator.reportValidityResult(
-                location.toString().toLowerCase() + ".annotation.forbidden", type, tree);
-        validator.isValid = false;
-    }
-
-    @Override
-    protected Void scan(AnnotatedTypeMirror type, Tree p) {
-        // The "type" here is constantly changing while visiting different types, like type arguments,
-        // component, upper/lower bound. The "p" parameter is always passed the same from the entry of
-        // visitXXX method from the top construct until the last any visitXXX method.
-        if (printDebug) {
-            System.out.println(
-                    "\n===>"
-                            + countScan++
-                            + ") "
-                            + "Visiting "
-                            + type
-                            + " kind: "
-                            + type.getKind());
-            Element elt = getElement(p);
-            if (elt != null) {
-                System.out.println("elt: " + elt + " resulteltkind: " + elt.getKind());
-            } else {
-                System.out.println(
-                        "~~~~~~~~~~~~Unhandle tree case: skip when element is null for the tree below:");
-            }
-            System.out.println("tree is: " + p + " usedtreekind: " + p.getKind());
-            if (visitedNodes.containsKey(type)) {
-                System.out.println("--- Skipped because visited");
-            }
-        }
-
-        return super.scan(type, p);
-    }
-
-    @Override
-    public Void visitDeclared(AnnotatedDeclaredType type, Tree p) {
-        if (visitedNodes.containsKey(type)) {
-            return visitedNodes.get(type);
-        }
-        visitedNodes.put(type, null);
-        // Not check if tree p is a "wide" class declaration tree
-        if (!TreeUtils.isClassTree(p)) {
-            for (AnnotatedTypeMirror tArg : type.getTypeArguments()) {
-                checkValidLocation(tArg, p, TypeUseLocation.TYPE_ARGUMENT);
-            }
-            scan(type.getTypeArguments(), p);
-        }
-        if (TreeUtils.isClassTree(p)) {
-            Tree extendsTree = ((ClassTree) p).getExtendsClause();
-            if (extendsTree != null) {
-                AnnotatedTypeMirror extendsType =
-                        this.validator.atypeFactory.getAnnotatedType(extendsTree);
-                /*if(printDebug) {
-                    System.out.println("Extends tree is: " + extendsTree + " treekind: " + extendsTree.getKind());
-                    System.out.println("Extends type is: " + extendsType);
-                }*/
-                checkValidLocation(extendsType, extendsTree, TypeUseLocation.EXTENDS);
-            }
-            List<? extends Tree> implementsTrees = ((ClassTree) p).getImplementsClause();
-            for (Tree implementsTree : implementsTrees) {
-                AnnotatedTypeMirror implmentsType =
-                        this.validator.atypeFactory.getAnnotatedType(implementsTree);
-                /*if(printDebug) {
-                    System.out.println("Implements tree is: " + implementsTree + " treekind: " + implementsTree.getKind());
-                    System.out.println("Implementss type is: " + implmentsType);
-                }*/
-                checkValidLocation(implmentsType, implementsTree, TypeUseLocation.IMPLEMENTS);
-            }
-        }
-        return null;
-    }
-
-    @Override
-    public Void visitArray(AnnotatedArrayType type, Tree p) {
-        // Begin to check array component
-        checkValidLocation(type.getComponentType(), p, TypeUseLocation.ARRAY_COMPONENT);
-        scan(type.getComponentType(), p);
-        return null;
-    }
-
-    @Override
-    public Void visitTypeVariable(AnnotatedTypeVariable type, Tree p) {
-        if (visitedNodes.containsKey(type)) {
-            return visitedNodes.get(type);
-        }
-        visitedNodes.put(type, null);
-        if (type.isDeclaration()) {
-            visitBounds(type, type.getUpperBound(), type.getLowerBound(), p);
-        }
-        return null;
-    }
-
-    @Override
-    public Void visitWildcard(AnnotatedWildcardType type, Tree p) {
-        if (visitedNodes.containsKey(type)) {
-            return visitedNodes.get(type);
-        }
-        visitedNodes.put(type, null);
-        visitBounds(type, type.getExtendsBound(), type.getSuperBound(), p);
-        return null;
-    }
-
-    /**
-     * Visit the bounds of a type variable or a wildcard and potentially apply qual to those
-     * bounds.  This method will also update the boundType, isLowerBound, and isUpperbound
-     * fields.
-     */
-    protected void visitBounds(
-            AnnotatedTypeMirror boundedType,
-            AnnotatedTypeMirror upperBound,
-            AnnotatedTypeMirror lowerBound,
-            Tree p) {
-
-        BoundType boundType = BoundTypeUtil.getBoundType(boundedType, validator.atypeFactory);
-        // TODO Is this correct to use this as condition to check if it's type parameter declaration
-        // Checking lower bound
-        if (p.getKind() == Tree.Kind.TYPE_PARAMETER) {
-            if (boundType.isOneOf(BoundType.LOWER)) {
-                // Explicit lower bound
-                checkValidLocation(lowerBound, p, TypeUseLocation.EXPLICIT_LOWER_BOUND);
-            } else if (boundType.isOneOf(BoundType.UNBOUND, BoundType.UPPER, BoundType.UNKNOWN)) {
-                // Implicit lower bound
-                // Do nothing
-            } else {
-                checkValidLocation(lowerBound, p, TypeUseLocation.LOWER_BOUND);
-            }
-        }
-        // We only need to validate explicit main annotation on lower/upper bounds. So no need to
-        // visit recursively. They will be scan afterwards in different trees
-        //scanAndReduce(lowerBound, p, null);
-
-        // Checking upper bound
-        if (p.getKind() == Tree.Kind.TYPE_PARAMETER) {
-            if (boundType.isOneOf(BoundType.UPPER, BoundType.UNKNOWN)) {
-                //Explicit upper bound
-                checkValidLocation(upperBound, p, TypeUseLocation.EXPLICIT_UPPER_BOUND);
-            } else if (boundType.isOneOf(BoundType.UNBOUND, BoundType.LOWER)) {
-                // Implicit upper bound => Do nothing
-                // Do nothing
-            } else {
-                // Upper bound
-                checkValidLocation(upperBound, p, TypeUseLocation.UPPER_BOUND);
-            }
-        }
-        // We only need to validate explicit main annotation on lower/upper bounds. So no need to
-        // visit recursively. They will be scan afterwards in different trees from which the deeper
-        // types can be validated
-        //scanAndReduce(upperBound, p, null);
     }
 }

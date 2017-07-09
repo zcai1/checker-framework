@@ -14,8 +14,8 @@ import org.checkerframework.javacutil.ErrorReporter;
 
 public class BoundTypeUtil {
     /**
-     * @param type the type whose boundType is returned.
-     *             type must be an AnnotatedWildcardType or AnnotatedTypeVariable
+     * @param type the type whose boundType is returned. type must be an AnnotatedWildcardType or
+     *     AnnotatedTypeVariable
      * @return the boundType for type
      */
     public static BoundType getBoundType(
@@ -32,18 +32,14 @@ public class BoundTypeUtil {
         return null; // dead code
     }
 
-    /**
-     * @return the bound type of the input typeVar
-     */
+    /** @return the bound type of the input typeVar */
     public static BoundType getTypeVarBoundType(
             final AnnotatedTypeVariable typeVar, final AnnotatedTypeFactory typeFactory) {
         return getTypeVarBoundType(
                 (TypeParameterElement) typeVar.getUnderlyingType().asElement(), typeFactory);
     }
 
-    /**
-     * @return the boundType (UPPER, UNBOUND, or UNKNOWN) of the declaration of typeParamElem
-     */
+    /** @return the boundType (UPPER, UNBOUND, or UNKNOWN) of the declaration of typeParamElem */
     public static BoundType getTypeVarBoundType(
             final TypeParameterElement typeParamElem, final AnnotatedTypeFactory typeFactory) {
 
@@ -81,8 +77,8 @@ public class BoundTypeUtil {
     }
 
     /**
-     * @return the BoundType of annotatedWildcard.  If it is unbounded, use the type parameter to
-     * which its an argument
+     * @return the BoundType of annotatedWildcard. If it is unbounded, use the type parameter to
+     *     which its an argument
      */
     public static BoundType getWildcardBoundType(
             final AnnotatedWildcardType annotatedWildcard, final AnnotatedTypeFactory typeFactory) {
