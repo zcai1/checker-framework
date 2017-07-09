@@ -3368,7 +3368,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                     // Nothing to do for void methods.
                     // Note that for a constructor the AnnotatedExecutableType does
                     // not use void as return type.
-                    return typeValidator.isValid(type, tree);
+                    return true;
                 }
                 break;
             default:
