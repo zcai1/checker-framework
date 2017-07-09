@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import testlib.qualifiedlocations.qual.Bottom;
 
-//:: error: (type_declaration.annotation.forbidden) :: error: (type_argument.annotation.forbidden) :: error: (explicit_upper_bound.annotation.forbidden)
+//:: error: (type_declaration.annotation.forbidden) :: error: (type_argument.annotation.forbidden) :: error: (explicit_upper_bound.annotation.forbidden) :: error: (implicit_lower_bound.annotation.forbidden) :: error: (type.invalid)
 public class Locations<T extends @Bottom List<@Bottom Number>>
         //:: error: (type_argument.annotation.forbidden) :: error: (extends.annotation.forbidden) :: error: (implements.annotation.forbidden)
         extends @Bottom ArrayList<@Bottom Object> implements @Bottom Iterable<@Bottom Object> {
@@ -12,7 +12,7 @@ public class Locations<T extends @Bottom List<@Bottom Number>>
     @Bottom T t;
     //:: error: (field.annotation.forbidden) :: error: (type_argument.annotation.forbidden)
     @Bottom List<@Bottom ArrayList<@Bottom String>> l;
-    //:: error: (type_argument.annotation.forbidden)
+    //:: error: (type_argument.annotation.forbidden) :: error: (array_component.annotation.forbidden)
     List<@Bottom String @Bottom [] @Bottom []>
             f; // It's strange that array component doesn't show error
 
@@ -20,8 +20,8 @@ public class Locations<T extends @Bottom List<@Bottom Number>>
     void foo() throws @Bottom Exception {
         //:: error: (local_variable.annotation.forbidden) :: error: (type_argument.annotation.forbidden) :: error: (new.annotation.forbidden)
         @Bottom Object l = new @Bottom ArrayList<@Bottom Object>();
-        //:: error: (instanceof.annotation.forbidden) :: error: (cast.annotation.forbidden)
-        boolean b = (@Bottom Object) l instanceof @Bottom List @Bottom [];
+        //:: error: (instanceof.annotation.forbidden) :: error: (cast.annotation.forbidden) :: error: (array_component.annotation.forbidden)
+        boolean b = (@Bottom Object) l instanceof @Bottom Object @Bottom [];
     }
 
     //:: error: (parameter.annotation.forbidden)
@@ -33,7 +33,7 @@ public class Locations<T extends @Bottom List<@Bottom Number>>
         }
     }
 
-    //:: error: (return.annotation.forbidden) :: error: (explicit_upper_bound.annotation.forbidden) :: error: (type_argument.annotation.forbidden) :: error: (receiver.annotation.forbidden)
+    //:: error: (return.annotation.forbidden) :: error: (explicit_upper_bound.annotation.forbidden) :: error: (type_argument.annotation.forbidden) :: error: (receiver.annotation.forbidden) :: error: (implicit_lower_bound.annotation.forbidden)
     <S extends @Bottom List<@Bottom Object>> @Bottom Object hey(Locations<@Bottom T> this, S s) {
         return null;
     }
