@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import testlib.qualifiedlocations.qual.Bottom;
 
-//:: error: (array_component.annotation.forbidden) :: error: (type_argument.annotation.forbidden) :: error: (explicit_upper_bound.annotation.forbidden)
-public class Locations<T extends @Bottom List<@Bottom Number @Bottom []>>
+//:: error: (type_declaration.annotation.forbidden) :: error: (type_argument.annotation.forbidden) :: error: (explicit_upper_bound.annotation.forbidden)
+public class Locations<T extends @Bottom List<@Bottom Number>>
         //:: error: (type_argument.annotation.forbidden) :: error: (extends.annotation.forbidden) :: error: (implements.annotation.forbidden)
         extends @Bottom ArrayList<@Bottom Object> implements @Bottom Iterable<@Bottom Object> {
     //:: error: (field.annotation.forbidden)
