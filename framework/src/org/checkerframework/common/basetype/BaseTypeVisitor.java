@@ -293,35 +293,6 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         visitorState.setMethodTree(null);
         visitorState.setAssignmentContext(null);
         try {
-            if (!TreeUtils.hasExplicitConstructor(classTree)) {
-                checkDefaultConstructor(classTree);
-            }
-
-            // We validate class tree to see if the annotation on it is allowed on type declaration location
-            validateTypeOf(classTree);
-            checkQualifiedLocation(
-                    atypeFactory.getAnnotatedType(classTree),
-                    classTree,
-                    TypeUseLocation.TYPE_DECLARATION);
-            /* Visit the extends and implements clauses.
-             * The superclass also visits them, but only calls visitParameterizedType, which
-             * loses a main modifier.
-             */
-            Tree ext = classTree.getExtendsClause();
-            if (ext != null) {
-                validateTypeOf(ext);
-                checkQualifiedLocation(
-                        atypeFactory.getAnnotatedType(ext), ext, TypeUseLocation.EXTENDS);
-            }
-
-            List<? extends Tree> impls = classTree.getImplementsClause();
-            if (impls != null) {
-                for (Tree im : impls) {
-                    validateTypeOf(im);
-                    checkQualifiedLocation(
-                            atypeFactory.getAnnotatedType(im), im, TypeUseLocation.IMPLEMENTS);
-                }
-            }
             processClassTree(classTree);
             atypeFactory.postProcessClassTree(classTree);
         } finally {
@@ -346,6 +317,11 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
             checkDefaultConstructor(classTree);
         }
 
+        checkQualifiedLocation(
+                atypeFactory.getAnnotatedType(classTree),
+                classTree,
+                TypeUseLocation.TYPE_DECLARATION);
+
         /* Visit the extends and implements clauses.
          * The superclass also visits them, but only calls visitParameterizedType, which
          * loses a main modifier.
@@ -353,12 +329,16 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         Tree ext = classTree.getExtendsClause();
         if (ext != null) {
             validateTypeOf(ext);
+            checkQualifiedLocation(
+                    atypeFactory.getAnnotatedType(ext), ext, TypeUseLocation.EXTENDS);
         }
 
         List<? extends Tree> impls = classTree.getImplementsClause();
         if (impls != null) {
             for (Tree im : impls) {
                 validateTypeOf(im);
+                checkQualifiedLocation(
+                        atypeFactory.getAnnotatedType(im), im, TypeUseLocation.IMPLEMENTS);
             }
         }
         super.visitClass(classTree, null);
@@ -1274,8 +1254,10 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
             if (enclosing.getKind() == Tree.Kind.METHOD) {
 
                 MethodTree enclosingMethod = TreeUtils.enclosingMethod(getCurrentPath());
-                // We don't validate enclosingMethod again, because it's already been validated during visitMethod
-                ret = atypeFactory.getMethodReturnType(enclosingMethod, node);
+                boolean valid = validateTypeOf(enclosing);
+                if (valid) {
+                    ret = atypeFactory.getMethodReturnType(enclosingMethod, node);
+                }
 
             } else {
                 Pair<AnnotatedDeclaredType, AnnotatedExecutableType> result =
@@ -1628,7 +1610,6 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         Tree typeTree = node.getType();
         AnnotatedTypeMirror instanceOfType = atypeFactory.getAnnotatedType(typeTree);
         checkQualifiedLocation(instanceOfType, typeTree, TypeUseLocation.INSTANCEOF);
-        validateTypeOf(node);
         validateTypeOf(node.getType());
         return super.visitInstanceOf(node, p);
     }
