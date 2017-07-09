@@ -2543,12 +2543,9 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
     private void reportLocationError(
             AnnotatedTypeMirror type, Tree tree, TypeUseLocation location) {
-        checker.report(
-                Result.failure(
-                        location.toString().toLowerCase() + ".annotation.forbidden",
-                        type.getAnnotations(),
-                        type.toString()),
-                tree);
+        /*@CompilerMessageKey*/ String errorMessage =
+                location.toString().toLowerCase() + ".annotation.forbidden";
+        checker.report(Result.failure(errorMessage, type.getAnnotations(), type.toString()), tree);
     }
 
     /**
