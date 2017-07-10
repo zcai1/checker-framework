@@ -822,6 +822,22 @@
         </antcall>
     </target>
 
+    <target name="gut-tests" depends="jar,build-tests"
+            description="Run tests for the GUT Checker">
+        <antcall target="-run-tests">
+            <param name="param" value="tests.GUTTestsLostNo"/>
+        </antcall>
+        <antcall target="-run-tests">
+            <param name="param" value="tests.GUTTestsLostYes"/>
+        </antcall>
+        <antcall target="-run-tests">
+            <param name="param" value="tests.GUTTestsStrictPurity"/>
+        </antcall>
+        <antcall target="-run-tests">
+            <param name="param" value="tests.GUTTestsTopology"/>
+        </antcall>
+    </target>
+
     <target name="i18n-tests" depends="jar,build-tests"
             description="Run tests for the I18n Checker">
         <antcall target="-run-tests">
