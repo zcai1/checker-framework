@@ -7,12 +7,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a side-effect (pure) method. See
+ * Marks a side-effect free (pure) method.
  *
- * <p>{@link http://www.eecs.ucf.edu/~leavens/JML/jmlrefman/jmlrefman_7.html#SEC59}
- *
- * <p>for a definition.
- *
+ * @see <a
+ *     href="http://www.eecs.ucf.edu/~leavens/JML/jmlrefman/jmlrefman_7.html#SEC59">Definition</a>
  * @author wmdietl
  */
 @Documented
