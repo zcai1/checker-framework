@@ -497,8 +497,8 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
     }
 
     /**
-     * Visit the bounds of a type variable or a wildcard and potentially apply qual to those bounds.
-     * This method will also update the boundType, isLowerBound, and isUpperbound fields.
+     * Validates the annotation are qualified to be used on the bounds of a type variable or a
+     * wildcard.
      */
     protected void validateQualifiedLocationsOnBounds(
             AnnotatedTypeMirror boundedType,
@@ -507,31 +507,18 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
             Tree p) {
 
         BoundType boundType = BoundTypeUtil.getBoundType(boundedType, atypeFactory);
-        // TODO Is this correct to use this as condition to check if it's type parameter declaration
 
-        // We only need to validate explicit main annotation on lower/upper bounds. So no need to
-        // visit recursively. They will be scan afterwards in different trees from which the deeper
-        // types can be validated
-        //scanAndReduce(upperBound, p, null);
-        // Checking upper bound
-        //if (p.getKind() == Tree.Kind.TYPE_PARAMETER) {
         if (boundType.isOneOf(BoundType.UPPER)) {
             //Explicit upper bound
             visitor.checkQualifiedLocation(upperBound, p, TypeUseLocation.EXPLICIT_UPPER_BOUND);
         } else if (boundType.isOneOf(BoundType.UNBOUND, BoundType.LOWER, BoundType.UNKNOWN)) {
-            // Implicit upper bound => Do nothing
+            // Implicit upper bound
             visitor.checkQualifiedLocation(upperBound, p, TypeUseLocation.IMPLICIT_UPPER_BOUND);
         } else {
-            // Upper bound
+            // Dead code
             visitor.checkQualifiedLocation(upperBound, p, TypeUseLocation.UPPER_BOUND);
         }
-        //}
 
-        // We only need to validate explicit main annotation on lower/upper bounds. So no need to
-        // visit recursively. They will be scan afterwards in different trees
-        //scanAndReduce(lowerBound, p, null);
-        // Checking lower bound
-        //if (p.getKind() == Tree.Kind.TYPE_PARAMETER) {
         if (boundType.isOneOf(BoundType.LOWER)) {
             // Explicit lower bound
             visitor.checkQualifiedLocation(lowerBound, p, TypeUseLocation.EXPLICIT_LOWER_BOUND);
@@ -539,9 +526,9 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
             // Implicit lower bound
             visitor.checkQualifiedLocation(lowerBound, p, TypeUseLocation.IMPLICIT_LOWER_BOUND);
         } else {
+            // Dead code
             visitor.checkQualifiedLocation(lowerBound, p, TypeUseLocation.LOWER_BOUND);
         }
-        //}
     }
 
     /**
