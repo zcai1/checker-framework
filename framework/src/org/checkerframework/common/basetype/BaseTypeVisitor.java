@@ -890,6 +890,8 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                     checkQualifiedLocation(type, node, TypeUseLocation.PARAMETER);
                 }
                 break;
+            default:
+                break;
         }
     }
 
@@ -2543,6 +2545,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
 
     private void reportLocationError(
             AnnotatedTypeMirror type, Tree tree, TypeUseLocation location) {
+        @SuppressWarnings("CompilerMessages")
         /*@CompilerMessageKey*/ String errorMessage =
                 location.toString().toLowerCase() + ".annotation.forbidden";
         checker.report(Result.failure(errorMessage, type.getAnnotations(), type.toString()), tree);
