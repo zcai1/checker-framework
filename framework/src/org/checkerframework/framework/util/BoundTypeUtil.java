@@ -12,6 +12,7 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedTypeVari
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedWildcardType;
 import org.checkerframework.javacutil.ErrorReporter;
 
+/** Utility class to get {@link BoundType} of a type variable or wildcard */
 public class BoundTypeUtil {
     /**
      * @param type the type whose boundType is returned. type must be an AnnotatedWildcardType or

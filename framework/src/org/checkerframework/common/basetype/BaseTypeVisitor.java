@@ -826,15 +826,6 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         return super.visitTypeParameter(node, p);
     }
 
-    /*    @Override
-    public Void visitArrayType(ArrayTypeTree node, Void aVoid) {
-        // Why this doesn't work? arrayType didn't include explicit annotations! Why?
-        AnnotatedArrayType arrayType = (AnnotatedArrayType) atypeFactory.getAnnotatedTypeFromTypeTree(node);
-        Tree componenetTree = node.getType();
-        checkQualifiedLocation(arrayType.getComponentType(), componenetTree, TypeUseLocation.ARRAY_COMPONENT);
-        return super.visitArrayType(node, aVoid);
-    }*/
-
     // **********************************************************************
     // Assignment checkers and pseudo-assignments
     // **********************************************************************
@@ -1260,7 +1251,6 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                 if (valid) {
                     ret = atypeFactory.getMethodReturnType(enclosingMethod, node);
                 }
-
             } else {
                 Pair<AnnotatedDeclaredType, AnnotatedExecutableType> result =
                         atypeFactory.getFnInterfaceFromTree((LambdaExpressionTree) enclosing);
@@ -1829,7 +1819,6 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
         if (shouldSkipUses(valueExp)) {
             return;
         }
-
         if (varType.getKind() == TypeKind.ARRAY
                 && valueExp instanceof NewArrayTree
                 && ((NewArrayTree) valueExp).getType() == null) {
@@ -1839,7 +1828,6 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                     : "array initializers are not expected to be null in: " + valueExp;
             checkArrayInitialization(compType, arrayTree.getInitializers());
         }
-        // Causes duplicate warnings on new, instanceof
         if (!validateTypeOf(valueExp)) {
             return;
         }
@@ -2524,7 +2512,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
             Element elementOfAnnotation = am.getAnnotationType().asElement();
             QualifiedLocations declLocations =
                     elementOfAnnotation.getAnnotation(QualifiedLocations.class);
-            // Null means no TargetLocations specified => Any use is correct.
+            // Null means no QualifiedLocations annotation => Any use is correct.
             if (declLocations != null) {
                 Set<TypeUseLocation> set = new HashSet<>(Arrays.asList(declLocations.value()));
                 if (set.contains(TypeUseLocation.ALL)) continue;

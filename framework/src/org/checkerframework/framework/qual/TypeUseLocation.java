@@ -83,28 +83,32 @@ public enum TypeUseLocation {
 
     /** Apply default annotations to unannotated type declarations: {@code @HERE class Demo{}} */
     TYPE_DECLARATION,
+
     /**
      * Represents type argument location in parameterized type {@code List<@TA1 ArrayList<@TA2
      * String>>}
      */
     TYPE_ARGUMENT,
+
     /** Represents array component location {@code @AC2 String [] @AC1 []} */
     ARRAY_COMPONENT,
 
-    /**
-     * TODO is this documentation correct? Or does it really represent interface extends case?
-     * Represents extends location of a class/interface/enum/annotation type
-     */
+    /** Represents extends location of a class or interface: {@code class B extends @HERE A {}} */
     EXTENDS,
 
+    /** Represents implements location of a class: {@code class B implements @HERE I {}} */
     IMPLEMENTS,
 
+    /** Represents throws location of a method: {@code void foo throws @HERE Exception {}} */
     THROWS,
 
+    /** Represents instanceof location: {@code o instanceof @HERE Object {}} */
     INSTANCEOF,
 
+    /** Represents new expression location: {@code new @HERE Object()} */
     NEW,
 
+    /** Represents casts location: {@code (@HERE Object)o} */
     CAST,
 
     /** Apply if nothing more concrete is provided. TODO: clarify relation to ALL. */
