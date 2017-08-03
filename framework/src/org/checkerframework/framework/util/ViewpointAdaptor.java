@@ -101,7 +101,7 @@ public abstract class ViewpointAdaptor<T> {
     public AnnotatedTypeMirror combineTypeWithType(
             AnnotatedTypeMirror recv, AnnotatedTypeMirror decl, AnnotatedTypeFactory f) {
         assert recv != null && decl != null && f != null;
-        AnnotatedTypeMirror result = null;
+        AnnotatedTypeMirror result = decl;
         if (recv.getKind() == TypeKind.TYPEVAR) {
             recv = ((AnnotatedTypeVariable) recv).getUpperBound();
         }

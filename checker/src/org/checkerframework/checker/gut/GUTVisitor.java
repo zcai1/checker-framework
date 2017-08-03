@@ -342,7 +342,7 @@ public class GUTVisitor extends BaseTypeVisitor<GUTAnnotatedTypeFactory> {
             final TypeElement element = (TypeElement) type.getUnderlyingType().asElement();
 
             List<AnnotatedTypeParameterBounds> typevars =
-                    atypeFactory.typeVariablesFromUse(type, element);
+                    atypeFactory.typeVariablesFromUse(type, element, tree);
 
             for (AnnotatedTypeParameterBounds atpb : typevars) {
                 if ((atpb.getUpperBound().getKind() != TypeKind.NULL

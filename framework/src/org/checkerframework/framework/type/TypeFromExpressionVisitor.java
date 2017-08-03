@@ -115,7 +115,7 @@ class TypeFromExpressionVisitor extends TypeFromTreeVisitor {
         Element elt = TreeUtils.elementFromUse(node);
         AnnotatedTypeMirror selfType = f.getImplicitReceiverType(node);
         if (selfType != null) {
-            return AnnotatedTypes.asMemberOf(f.types, f, selfType, elt).asUse();
+            return AnnotatedTypes.asMemberOf(f.types, f, selfType, elt, node).asUse();
         }
 
         return f.getAnnotatedType(elt);
@@ -159,8 +159,9 @@ class TypeFromExpressionVisitor extends TypeFromTreeVisitor {
         } else {
             // node must be a field access, so get the type of the expression, and then call
             // asMemberOf.
+
             AnnotatedTypeMirror t = f.getAnnotatedType(node.getExpression());
-            return AnnotatedTypes.asMemberOf(f.types, f, t, elt).asUse();
+            return AnnotatedTypes.asMemberOf(f.types, f, t, elt, node).asUse();
         }
     }
 

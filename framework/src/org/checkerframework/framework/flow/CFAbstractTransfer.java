@@ -272,7 +272,8 @@ public abstract class CFAbstractTransfer<
                                     analysis.atypeFactory.getProcessingEnv().getTypeUtils(),
                                     analysis.atypeFactory,
                                     pair.getKey(),
-                                    pair.getValue());
+                                    pair.getValue(),
+                                    null);
 
                     // Infers parameter and receiver types of the method based
                     // on the overridden method.
