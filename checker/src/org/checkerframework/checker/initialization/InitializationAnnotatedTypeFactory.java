@@ -338,8 +338,8 @@ public abstract class InitializationAnnotatedTypeFactory<
      */
     @Override
     public void postAsMemberOf(
-            AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element) {
-        super.postAsMemberOf(type, owner, element);
+            AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element, Tree tree) {
+        super.postAsMemberOf(type, owner, element, tree);
 
         if (element.getKind().isField()) {
             Collection<? extends AnnotationMirror> declaredFieldAnnotations =

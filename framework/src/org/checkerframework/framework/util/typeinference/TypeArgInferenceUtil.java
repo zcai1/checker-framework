@@ -215,7 +215,8 @@ public class TypeArgInferenceUtil {
                         atypeFactory.getContext().getTypeUtils(),
                         atypeFactory,
                         receiver,
-                        methodElt);
+                        methodElt,
+                        null);
         int treeIndex = -1;
         for (int i = 0; i < arguments.size(); ++i) {
             ExpressionTree argumentTree = arguments.get(i);
