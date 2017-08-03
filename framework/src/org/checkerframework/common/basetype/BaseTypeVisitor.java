@@ -557,7 +557,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
                 AnnotatedDeclaredType overriddenType = pair.getKey();
                 AnnotatedExecutableType overriddenMethod =
                         AnnotatedTypes.asMemberOf(
-                                types, atypeFactory, overriddenType, pair.getValue());
+                                types, atypeFactory, overriddenType, pair.getValue(), node);
                 if (!checkOverride(node, enclosingType, overriddenMethod, overriddenType, p)) {
                     // Stop at the first mismatch; this makes a difference only if
                     // -Awarns is passed, in which case multiple warnings might be raised on
