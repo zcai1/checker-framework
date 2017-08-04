@@ -1967,8 +1967,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * method invocation parameters.
      *
      * <p>As an implementation detail, this method depends on {@link
-     * AnnotatedTypes#asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element)}, and
-     * customization based on receiver type should be in accordance to its specification.
+     * AnnotatedTypes#asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element, Tree)},
+     * and customization based on receiver type should be in accordance to its specification.
      *
      * <p>The return type is a pair of the type of the invoked method and the (inferred) type
      * arguments. Note that neither the explicitly passed nor the inferred type arguments are
@@ -2162,8 +2162,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * constructor invocation parameters.
      *
      * <p>As an implementation detail, this method depends on {@link
-     * AnnotatedTypes#asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element)}, and
-     * customization based on receiver type should be in accordance with its specification.
+     * AnnotatedTypes#asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element, Tree)},
+     * and customization based on receiver type should be in accordance with its specification.
      *
      * <p>The return type is a pair of the type of the invoked constructor and the (inferred) type
      * arguments. Note that neither the explicitly passed nor the inferred type arguments are
