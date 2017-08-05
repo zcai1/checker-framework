@@ -3454,7 +3454,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         // ========= Overridden Type =========
         AnnotatedDeclaredType functionalInterfaceType = getFunctionalInterfaceType(tree);
-        makeGroundTargetType(functionalInterfaceType, (DeclaredType) InternalUtils.typeOf(tree), tree);
+        makeGroundTargetType(
+                functionalInterfaceType, (DeclaredType) InternalUtils.typeOf(tree), tree);
 
         // ========= Overridden Executable =========
         Element fnElement = InternalUtils.findFunction(tree, processingEnv);
@@ -3645,7 +3646,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         List<AnnotatedTypeParameterBounds> bounds =
                 this.typeVariablesFromUse(
                         functionalType,
-                        (TypeElement) functionalType.getUnderlyingType().asElement(), tree);
+                        (TypeElement) functionalType.getUnderlyingType().asElement(),
+                        tree);
 
         List<AnnotatedTypeMirror> newTypeArguments =
                 new ArrayList<>(functionalType.getTypeArguments());
