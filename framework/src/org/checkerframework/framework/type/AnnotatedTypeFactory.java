@@ -318,19 +318,6 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      */
     public final boolean ignoreUninferredTypeArguments;
 
-     /** A boolean flag to indicate viewpoint adaptation is needed or not. If yes, {@link
-     * AnnotatedTypeFactory#vputil}} is used to perform viewpoint adaptation
-     * A boolean flag to indicate {@link AnnotatedTypeFactory#viewpointAdaptor} is null or not.
-     * These are two things: type system claims to need viewpoint adaptation and {@link
-     * AnnotatedTypeFactory#viewpointAdaptor} is null or not. If type system claims to need
-     * viewpoint adaptation, but fails to provide valid concrete subclass implementation of {@link
-     * ViewpointAdaptor}, this filed is still set to false, and error aborts. If true, i.e.
-     * viewpointAdaptor is non-null, then {@link AnnotatedTypeFactory#viewpointAdaptor}} is used to
-     * perform viewpoint adaptation. In this way, we can ensure that
-     * withEffectiveViewpointAdaptation implies viewpointAdaptor is non-null
-     */
-    protected final boolean withEffectiveViewpointAdaptation;
-
     /**
      * Constructs a factory from the given {@link ProcessingEnvironment} instance and syntax tree
      * root. (These parameters are required so that the factory may conduct the appropriate
@@ -1324,6 +1311,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @param type the annotated type of the element
      * @param owner the annotated type of the receiver of the accessing tree
      * @param element the element of the field or method
+     * @param tree the tree that contains member access
      */
     public void postAsMemberOf(
             AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element, Tree tree) {
@@ -1511,6 +1499,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      *
      * @param type the use of the type
      * @param element the corresponding element
+     * @param tree tree where type variable is used
      * @return the adapted bounds of the type parameters
      */
     public List<AnnotatedTypeParameterBounds> typeVariablesFromUse(
@@ -3465,7 +3454,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         // ========= Overridden Type =========
         AnnotatedDeclaredType functionalInterfaceType = getFunctionalInterfaceType(tree);
-        makeGroundTargetType(functionalInterfaceType, (DeclaredType) InternalUtils.typeOf(tree));
+        makeGroundTargetType(functionalInterfaceType, (DeclaredType) InternalUtils.typeOf(tree), tree);
 
         // ========= Overridden Executable =========
         Element fnElement = InternalUtils.findFunction(tree, processingEnv);
@@ -3645,9 +3634,10 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @see "JLS 9.9"
      * @param functionalType the functional interface type
      * @param groundTargetJavaType the Java type as found by javac
+     * @param tree the MemberReferenceTree or LambdaExpressionTree
      */
     private void makeGroundTargetType(
-            AnnotatedDeclaredType functionalType, DeclaredType groundTargetJavaType) {
+            AnnotatedDeclaredType functionalType, DeclaredType groundTargetJavaType, Tree tree) {
         if (functionalType.getTypeArguments().isEmpty()) {
             return;
         }
@@ -3655,7 +3645,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         List<AnnotatedTypeParameterBounds> bounds =
                 this.typeVariablesFromUse(
                         functionalType,
-                        (TypeElement) functionalType.getUnderlyingType().asElement());
+                        (TypeElement) functionalType.getUnderlyingType().asElement(), tree);
 
         List<AnnotatedTypeMirror> newTypeArguments =
                 new ArrayList<>(functionalType.getTypeArguments());
