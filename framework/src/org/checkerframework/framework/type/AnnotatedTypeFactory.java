@@ -2054,6 +2054,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         if (viewpointAdaptor != null) {
             AnnotatedExecutableType declMethodType = this.getAnnotatedType(methodElt);
             AnnotatedTypeMirror returnType = declMethodType.getReturnType();
+            AnnotatedTypeMirror methodReceiver = declMethodType.getReceiverType();
             List<AnnotatedTypeMirror> parameterTypes = declMethodType.getParameterTypes();
             List<AnnotatedTypeVariable> typeVariables = declMethodType.getTypeVariables();
 
@@ -2068,6 +2069,11 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                 AnnotatedTypeMirror p =
                         viewpointAdaptor.combineTypeWithType(receiverType, parameterType, this);
                 mappings.put(parameterType, p);
+            }
+            if (methodReceiver != null) {
+                AnnotatedTypeMirror mr =
+                        viewpointAdaptor.combineTypeWithType(receiverType, methodReceiver, this);
+                mappings.put(methodReceiver, mr);
             }
             for (AnnotatedTypeVariable typeVariable : typeVariables) {
                 AnnotatedTypeMirror ub =
@@ -2087,6 +2093,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             // Because we can't viewpoint adapt asMemberOf result, we adapt the declared method first, and sets the
             // corresponding parts to asMemberOf result
             methodType.setReturnType(declMethodType.getReturnType());
+            methodType.setReceiverType(declMethodType.getReceiverType());
             methodType.setParameterTypes(declMethodType.getParameterTypes());
             methodType.setTypeVariables(declMethodType.getTypeVariables());
         }
@@ -2204,6 +2211,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             AnnotatedTypeMirror type, AnnotatedExecutableType con) {
         List<AnnotatedTypeMirror> parameterTypes = con.getParameterTypes();
         List<AnnotatedTypeVariable> typeVariables = con.getTypeVariables();
+        AnnotatedTypeMirror constructorReturn = con.getReturnType();
 
         if (viewpointAdaptor != null) {
             Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new HashMap<>();
@@ -2217,6 +2225,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                         viewpointAdaptor.combineTypeWithType(type, typeVariable, this);
                 mappings.put(typeVariable, tv);
             }
+            AnnotatedTypeMirror cr =
+                    viewpointAdaptor.combineTypeWithType(type, constructorReturn, this);
+            mappings.put(constructorReturn, cr);
             con = (AnnotatedExecutableType) AnnotatedTypeReplacer.replace(con, mappings);
         }
         return con;
