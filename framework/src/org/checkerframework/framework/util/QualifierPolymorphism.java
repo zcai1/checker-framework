@@ -217,14 +217,17 @@ public class QualifierPolymorphism {
         }
 
         TreePath path = atypeFactory.getPath(tree);
-        AnnotatedTypeMirror assignmentContext = TypeArgInferenceUtil.assignedTo(atypeFactory, path);
-        if (assignmentContext != null) {
-            matchingMapping =
-                    collector.reduce2(
-                            matchingMapping,
-                            collector.visit(
-                                    // Actual assignment lhs type
-                                    type.getReturnType(), assignmentContext));
+        if (path != null) {
+            AnnotatedTypeMirror assignmentContext =
+                    TypeArgInferenceUtil.assignedTo(atypeFactory, path);
+            if (assignmentContext != null) {
+                matchingMapping =
+                        collector.reduce2(
+                                matchingMapping,
+                                collector.visit(
+                                        // Actual assignment lhs type
+                                        type.getReturnType(), assignmentContext));
+            }
         }
 
         if (matchingMapping != null && !matchingMapping.isEmpty()) {
