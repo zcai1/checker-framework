@@ -2013,7 +2013,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         AnnotatedExecutableType methodType =
                 AnnotatedTypes.asMemberOf(types, this, receiverType, methodElt, tree);
 
-        viewpointAdaptMethod(methodElt, receiverType, methodType);
+        if (!ElementUtils.isStatic(methodElt)) {
+            viewpointAdaptMethod(methodElt, receiverType, methodType);
+        }
 
         List<AnnotatedTypeMirror> typeargs = new LinkedList<AnnotatedTypeMirror>();
 
