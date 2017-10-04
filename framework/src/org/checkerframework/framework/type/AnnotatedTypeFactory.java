@@ -41,6 +41,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -2060,7 +2061,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             List<AnnotatedTypeMirror> parameterTypes = declMethodType.getParameterTypes();
             List<AnnotatedTypeVariable> typeVariables = declMethodType.getTypeVariables();
 
-            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new HashMap<>();
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new IdentityHashMap<>();
 
             if (returnType.getKind() != TypeKind.VOID) {
                 AnnotatedTypeMirror r =
@@ -2216,7 +2217,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         AnnotatedTypeMirror constructorReturn = con.getReturnType();
 
         if (viewpointAdaptor != null) {
-            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new HashMap<>();
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new IdentityHashMap<>();
             for (AnnotatedTypeMirror parameterType : parameterTypes) {
                 AnnotatedTypeMirror p =
                         viewpointAdaptor.combineTypeWithType(type, parameterType, this);
