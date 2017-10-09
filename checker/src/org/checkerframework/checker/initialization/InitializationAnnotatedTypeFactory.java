@@ -175,7 +175,8 @@ public abstract class InitializationAnnotatedTypeFactory<
      */
     protected final boolean hasFieldInvariantAnnotation(VariableTree field) {
         AnnotatedTypeMirror type = getAnnotatedType(field);
-        return hasFieldInvariantAnnotation(type);
+        VariableElement fieldElement = TreeUtils.elementFromDeclaration(field);
+        return hasFieldInvariantAnnotation(type, fieldElement);
     }
 
     /**
@@ -188,7 +189,8 @@ public abstract class InitializationAnnotatedTypeFactory<
      * @param type of field that might have invariant annotation
      * @return whether or not the type has the invariant annotation
      */
-    protected abstract boolean hasFieldInvariantAnnotation(AnnotatedTypeMirror type);
+    protected abstract boolean hasFieldInvariantAnnotation(
+            AnnotatedTypeMirror type, VariableElement fieldElement);
 
     /** Returns a {@link UnderInitialization} annotation with a given type frame. */
     public AnnotationMirror createFreeAnnotation(TypeMirror typeFrame) {
@@ -357,7 +359,7 @@ public abstract class InitializationAnnotatedTypeFactory<
      * @see #computeFieldAccessType
      * @see #getAnnotatedTypeLhs(Tree)
      */
-    private boolean computingAnnotatedTypeMirrorOfLHS = false;
+    protected boolean computingAnnotatedTypeMirrorOfLHS = false;
 
     @Override
     public AnnotatedTypeMirror getAnnotatedTypeLhs(Tree lhsTree) {
