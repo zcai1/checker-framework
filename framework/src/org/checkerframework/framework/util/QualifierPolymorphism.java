@@ -218,6 +218,7 @@ public class QualifierPolymorphism {
 
         TreePath path = atypeFactory.getPath(tree);
         if (path != null) {
+            // TODO Solve crash on library jblas
             AnnotatedTypeMirror assignmentContext =
                     TypeArgInferenceUtil.assignedTo(atypeFactory, path);
             if (assignmentContext != null) {

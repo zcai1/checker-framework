@@ -23,7 +23,8 @@ import org.checkerframework.javacutil.Pair;
 /**
  * Utility class to perform viewpoint adaptation. It has two major clients: one is on framework
  * side, the other is on inference side. See framework side implementation {@link
- * FrameworkViewpointAdaptor} for more information.
+ * FrameworkViewpointAdaptor} for more information. TODO Use generic type for f parameter in
+ * ViewpointAdaptor implementation.
  *
  * @author tamier
  * @author wmdietl
@@ -80,7 +81,7 @@ public abstract class ViewpointAdaptor<T> {
     }
 
     /**
-     * Determines in which case type should not be viewpoint adapted.
+     * Determines in which case type should be viewpoint adapted.
      *
      * @param type type of the element after AnnotatedTypes#asMemberOfImpl
      * @param element element whose type is being considered to be adapted or not
