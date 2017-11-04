@@ -41,6 +41,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -104,6 +105,7 @@ import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
 import org.checkerframework.framework.util.TreePathCacher;
+import org.checkerframework.framework.util.ViewpointAdapter;
 import org.checkerframework.framework.util.typeinference.DefaultTypeArgumentInference;
 import org.checkerframework.framework.util.typeinference.TypeArgumentInference;
 import org.checkerframework.javacutil.AnnotationBuilder;
@@ -182,6 +184,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
     /** performs whole program inference */
     private WholeProgramInference wholeProgramInference;
+
+    /** Viewpoint adaptor to perform viewpoint adaptation */
+    protected ViewpointAdapter<?> viewpointAdapter;
 
     /**
      * This formatter is used for converting AnnotatedTypeMirrors to Strings. This formatter will be
@@ -473,6 +478,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         this.typeHierarchy = createTypeHierarchy();
         this.typeVarSubstitutor = createTypeVariableSubstitutor();
         this.typeArgumentInference = createTypeArgumentInference();
+        this.viewpointAdapter = createViewpointAdapter();
 
         // TODO: is this the best location for declaring this alias?
         addAliasedDeclAnnotation(
@@ -1326,11 +1332,34 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @param element the element of the field or method
      */
     public void postAsMemberOf(
-            AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element) {
+            AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element, Tree tree) {
         if (element.getKind() == ElementKind.FIELD) {
             addAnnotationFromFieldInvariant(type, owner, (VariableElement) element);
         }
         addComputedTypeAnnotations(element, type);
+        viewpointAdaptMember(type, owner, element);
+    }
+
+    protected void viewpointAdaptMember(
+            AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element) {
+        if (viewpointAdapter != null && viewpointAdapter.shouldBeAdapted(type, element)) {
+            AnnotatedTypeMirror decltype = this.getAnnotatedType(element);
+            AnnotatedTypeMirror combinedType =
+                    this.viewpointAdapter.combineTypeWithType(owner, decltype, this);
+            // Update: we don't have a method to do this job. I think we need to add this logic.
+            type.replaceAnnotation(viewpointAdapter.getAnnotationMirror(combinedType, this));
+            if (type.getKind() == TypeKind.DECLARED
+                    && combinedType.getKind() == TypeKind.DECLARED) {
+                AnnotatedDeclaredType adtType = (AnnotatedDeclaredType) type;
+                AnnotatedDeclaredType adtCombinedType = (AnnotatedDeclaredType) combinedType;
+                adtType.setTypeArguments(adtCombinedType.getTypeArguments());
+            } else if (type.getKind() == TypeKind.ARRAY
+                    && combinedType.getKind() == TypeKind.ARRAY) {
+                AnnotatedArrayType aatType = (AnnotatedArrayType) type;
+                AnnotatedArrayType aatCombinedType = (AnnotatedArrayType) combinedType;
+                aatType.setComponentType(aatCombinedType.getComponentType());
+            }
+        }
     }
 
     /**
@@ -1501,7 +1530,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @return the adapted bounds of the type parameters
      */
     public List<AnnotatedTypeParameterBounds> typeVariablesFromUse(
-            AnnotatedDeclaredType type, TypeElement element) {
+            AnnotatedDeclaredType type, TypeElement element, Tree tree) {
 
         AnnotatedDeclaredType generic = getAnnotatedType(element);
         List<AnnotatedTypeMirror> targs = type.getTypeArguments();
@@ -1529,13 +1558,30 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         List<AnnotatedTypeParameterBounds> res = new LinkedList<>();
 
+        viewpointAdaptTypeVariableBounds(type, tvars, mapping, res);
+        return res;
+    }
+
+    protected void viewpointAdaptTypeVariableBounds(
+            AnnotatedDeclaredType type,
+            List<AnnotatedTypeMirror> tvars,
+            Map<TypeVariable, AnnotatedTypeMirror> mapping,
+            List<AnnotatedTypeParameterBounds> res) {
         for (AnnotatedTypeMirror atm : tvars) {
             AnnotatedTypeVariable atv = (AnnotatedTypeVariable) atm;
-            AnnotatedTypeMirror upper = typeVarSubstitutor.substitute(mapping, atv.getUpperBound());
-            AnnotatedTypeMirror lower = typeVarSubstitutor.substitute(mapping, atv.getLowerBound());
+            AnnotatedTypeMirror upper = atv.getUpperBound();
+            if (viewpointAdapter != null) {
+                upper = viewpointAdapter.combineTypeWithType(type, upper, this);
+            }
+            upper = typeVarSubstitutor.substitute(mapping, upper);
+            AnnotatedTypeMirror lower = atv.getLowerBound();
+            if (viewpointAdapter != null) {
+                lower = viewpointAdapter.combineTypeWithType(type, lower, this);
+            }
+            lower = typeVarSubstitutor.substitute(mapping, lower);
+
             res.add(new AnnotatedTypeParameterBounds(upper, lower));
         }
-        return res;
     }
 
     /**
@@ -1946,7 +1992,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * method invocation parameters.
      *
      * <p>As an implementation detail, this method depends on {@link
-     * AnnotatedTypes#asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element)}, and
+     * AnnotatedTypes#asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element, Tree)},
      * customization based on receiver type should be in accordance to its specification.
      *
      * <p>The return type is a pair of the type of the invoked method and the (inferred) type
@@ -2001,7 +2047,12 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             ExpressionTree tree, ExecutableElement methodElt, AnnotatedTypeMirror receiverType) {
 
         AnnotatedExecutableType methodType =
-                AnnotatedTypes.asMemberOf(types, this, receiverType, methodElt);
+                AnnotatedTypes.asMemberOf(types, this, receiverType, methodElt, tree);
+
+        if (!ElementUtils.isStatic(methodElt)) {
+            viewpointAdaptMethod(methodElt, receiverType, methodType);
+        }
+
         List<AnnotatedTypeMirror> typeargs = new LinkedList<AnnotatedTypeMirror>();
 
         Map<TypeVariable, AnnotatedTypeMirror> typeVarMapping =
@@ -2032,6 +2083,58 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         }
 
         return Pair.of(methodType, typeargs);
+    }
+
+    protected void viewpointAdaptMethod(
+            ExecutableElement methodElt,
+            AnnotatedTypeMirror receiverType,
+            AnnotatedExecutableType methodType) {
+        if (viewpointAdapter != null) {
+            AnnotatedExecutableType declMethodType = this.getAnnotatedType(methodElt);
+            AnnotatedTypeMirror returnType = declMethodType.getReturnType();
+            AnnotatedTypeMirror methodReceiver = declMethodType.getReceiverType();
+            List<AnnotatedTypeMirror> parameterTypes = declMethodType.getParameterTypes();
+            List<AnnotatedTypeVariable> typeVariables = declMethodType.getTypeVariables();
+
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new IdentityHashMap<>();
+
+            if (returnType.getKind() != TypeKind.VOID) {
+                AnnotatedTypeMirror r =
+                        viewpointAdapter.combineTypeWithType(receiverType, returnType, this);
+                mappings.put(returnType, r);
+            }
+            for (AnnotatedTypeMirror parameterType : parameterTypes) {
+                AnnotatedTypeMirror p =
+                        viewpointAdapter.combineTypeWithType(receiverType, parameterType, this);
+                mappings.put(parameterType, p);
+            }
+            if (methodReceiver != null) {
+                AnnotatedTypeMirror mr =
+                        viewpointAdapter.combineTypeWithType(receiverType, methodReceiver, this);
+                mappings.put(methodReceiver, mr);
+            }
+            for (AnnotatedTypeVariable typeVariable : typeVariables) {
+                AnnotatedTypeMirror ub =
+                        viewpointAdapter.combineTypeWithType(
+                                receiverType, typeVariable.getUpperBound(), this);
+                mappings.put(typeVariable.getUpperBound(), ub);
+                AnnotatedTypeMirror lb =
+                        viewpointAdapter.combineTypeWithType(
+                                receiverType, typeVariable.getLowerBound(), this);
+                mappings.put(typeVariable.getLowerBound(), lb);
+            }
+
+            declMethodType =
+                    (AnnotatedExecutableType)
+                            AnnotatedTypeReplacer.replace(declMethodType, mappings);
+
+            // Because we can't viewpoint adapt asMemberOf result, we adapt the declared method first, and sets the
+            // corresponding parts to asMemberOf result
+            methodType.setReturnType(declMethodType.getReturnType());
+            methodType.setReceiverType(declMethodType.getReceiverType());
+            methodType.setParameterTypes(declMethodType.getParameterTypes());
+            methodType.setTypeVariables(declMethodType.getTypeVariables());
+        }
     }
 
     /**
@@ -2093,8 +2196,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * constructor invocation parameters.
      *
      * <p>As an implementation detail, this method depends on {@link
-     * AnnotatedTypes#asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element)}, and
-     * customization based on receiver type should be in accordance with its specification.
+     * AnnotatedTypes#asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element, Tree)},
+     * and customization based on receiver type should be in accordance with its specification.
      *
      * <p>The return type is a pair of the type of the invoked constructor and the (inferred) type
      * arguments. Note that neither the explicitly passed nor the inferred type arguments are
@@ -2114,7 +2217,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         ExecutableElement ctor = InternalUtils.constructor(tree);
         AnnotatedTypeMirror type = fromNewClass(tree);
         addComputedTypeAnnotations(tree.getIdentifier(), type);
-        AnnotatedExecutableType con = AnnotatedTypes.asMemberOf(types, this, type, ctor);
+        AnnotatedExecutableType con = AnnotatedTypes.asMemberOf(types, this, type, ctor, tree);
 
         if (tree.getArguments().size() == con.getParameterTypes().size() + 1
                 && isSyntheticArgument(tree.getArguments().get(0))) {
@@ -2124,6 +2227,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             actualParams.addAll(con.getParameterTypes());
             con.setParameterTypes(actualParams);
         }
+
+        con = viewpointAdaptConstructor(type, con);
 
         List<AnnotatedTypeMirror> typeargs = new LinkedList<AnnotatedTypeMirror>();
 
@@ -2138,6 +2243,32 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         }
 
         return Pair.of(con, typeargs);
+    }
+
+    protected AnnotatedExecutableType viewpointAdaptConstructor(
+            AnnotatedTypeMirror type, AnnotatedExecutableType con) {
+        List<AnnotatedTypeMirror> parameterTypes = con.getParameterTypes();
+        List<AnnotatedTypeVariable> typeVariables = con.getTypeVariables();
+        AnnotatedTypeMirror constructorReturn = con.getReturnType();
+
+        if (viewpointAdapter != null) {
+            Map<AnnotatedTypeMirror, AnnotatedTypeMirror> mappings = new IdentityHashMap<>();
+            for (AnnotatedTypeMirror parameterType : parameterTypes) {
+                AnnotatedTypeMirror p =
+                        viewpointAdapter.combineTypeWithType(type, parameterType, this);
+                mappings.put(parameterType, p);
+            }
+            for (AnnotatedTypeMirror typeVariable : typeVariables) {
+                AnnotatedTypeMirror tv =
+                        viewpointAdapter.combineTypeWithType(type, typeVariable, this);
+                mappings.put(typeVariable, tv);
+            }
+            AnnotatedTypeMirror cr =
+                    viewpointAdapter.combineTypeWithType(type, constructorReturn, this);
+            mappings.put(constructorReturn, cr);
+            con = (AnnotatedExecutableType) AnnotatedTypeReplacer.replace(con, mappings);
+        }
+        return con;
     }
 
     /** Returns the return type of the method {@code m}. */
@@ -3460,7 +3591,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         // ========= Overridden Type =========
         AnnotatedDeclaredType functionalInterfaceType = getFunctionalInterfaceType(tree);
-        makeGroundTargetType(functionalInterfaceType, (DeclaredType) InternalUtils.typeOf(tree));
+        makeGroundTargetType(
+                functionalInterfaceType, (DeclaredType) InternalUtils.typeOf(tree), tree);
 
         // ========= Overridden Executable =========
         Element fnElement = InternalUtils.findFunction(tree, processingEnv);
@@ -3468,7 +3600,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         // The method viewed from the declared type
         AnnotatedExecutableType methodExe =
                 (AnnotatedExecutableType)
-                        AnnotatedTypes.asMemberOf(types, this, functionalInterfaceType, fnElement);
+                        AnnotatedTypes.asMemberOf(
+                                types, this, functionalInterfaceType, fnElement, tree);
 
         return Pair.of(functionalInterfaceType, methodExe);
     }
@@ -3639,9 +3772,10 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @see "JLS 9.9"
      * @param functionalType the functional interface type
      * @param groundTargetJavaType the Java type as found by javac
+     * @param tree the MemberReferenceTree or LambdaExpressionTree
      */
     private void makeGroundTargetType(
-            AnnotatedDeclaredType functionalType, DeclaredType groundTargetJavaType) {
+            AnnotatedDeclaredType functionalType, DeclaredType groundTargetJavaType, Tree tree) {
         if (functionalType.getTypeArguments().isEmpty()) {
             return;
         }
@@ -3649,7 +3783,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         List<AnnotatedTypeParameterBounds> bounds =
                 this.typeVariablesFromUse(
                         functionalType,
-                        (TypeElement) functionalType.getUnderlyingType().asElement());
+                        (TypeElement) functionalType.getUnderlyingType().asElement(),
+                        tree);
 
         List<AnnotatedTypeMirror> newTypeArguments =
                 new ArrayList<>(functionalType.getTypeArguments());
@@ -3742,5 +3877,14 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     /** Accessor for the {@link CFContext}. */
     public CFContext getContext() {
         return checker;
+    }
+
+    /** Factory method to create ViewpointAdaptor. */
+    protected ViewpointAdapter<?> createViewpointAdapter() {
+        return null;
+    }
+
+    public ViewpointAdapter<?> getViewpointAdapter() {
+        return viewpointAdapter;
     }
 }
