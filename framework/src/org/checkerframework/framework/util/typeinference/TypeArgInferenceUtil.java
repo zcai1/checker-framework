@@ -140,13 +140,15 @@ public class TypeArgInferenceUtil {
             res = atypeFactory.getAnnotatedType(variable);
         } else if (assignmentContext instanceof MethodInvocationTree) {
             MethodInvocationTree methodInvocation = (MethodInvocationTree) assignmentContext;
+            ExecutableElement methodElt = TreeUtils.elementFromUse(methodInvocation);
             // TODO move to getAssignmentContext
             if (methodInvocation.getMethodSelect() instanceof MemberSelectTree
                     && ((MemberSelectTree) methodInvocation.getMethodSelect()).getExpression()
                             == path.getLeaf()) {
-                return null;
+                // treepath's leaf is assigned to the method declared receiver type
+                AnnotatedExecutableType declMethodType = atypeFactory.getAnnotatedType(methodElt);
+                return declMethodType.getReceiverType();
             }
-            ExecutableElement methodElt = TreeUtils.elementFromUse(methodInvocation);
             AnnotatedTypeMirror receiver = atypeFactory.getReceiverType(methodInvocation);
             res =
                     assignedToExecutable(
@@ -215,7 +217,8 @@ public class TypeArgInferenceUtil {
                         atypeFactory.getContext().getTypeUtils(),
                         atypeFactory,
                         receiver,
-                        methodElt);
+                        methodElt,
+                        null);
         int treeIndex = -1;
         for (int i = 0; i < arguments.size(); ++i) {
             ExpressionTree argumentTree = arguments.get(i);

@@ -182,13 +182,14 @@ public class AnnotatedTypes {
         return asSuper(atypeFactory, type, superType);
     }
 
-    /** @see #asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element) */
+    /** @see #asMemberOf(Types, AnnotatedTypeFactory, AnnotatedTypeMirror, Element, Tree) */
     public static AnnotatedExecutableType asMemberOf(
             Types types,
             AnnotatedTypeFactory atypeFactory,
             AnnotatedTypeMirror t,
-            ExecutableElement elem) {
-        return (AnnotatedExecutableType) asMemberOf(types, atypeFactory, t, (Element) elem);
+            ExecutableElement elem,
+            Tree tree) {
+        return (AnnotatedExecutableType) asMemberOf(types, atypeFactory, t, (Element) elem, tree);
     }
 
     /**
@@ -215,7 +216,11 @@ public class AnnotatedTypes {
      * @param elem an element
      */
     public static AnnotatedTypeMirror asMemberOf(
-            Types types, AnnotatedTypeFactory atypeFactory, AnnotatedTypeMirror t, Element elem) {
+            Types types,
+            AnnotatedTypeFactory atypeFactory,
+            AnnotatedTypeMirror t,
+            Element elem,
+            Tree tree) {
         // asMemberOf is only for fields, variables, and methods!
         // Otherwise, simply use fromElement.
         switch (elem.getKind()) {
@@ -226,9 +231,9 @@ public class AnnotatedTypes {
             case TYPE_PARAMETER:
                 return atypeFactory.fromElement(elem);
             default:
-                AnnotatedTypeMirror type = asMemberOfImpl(types, atypeFactory, t, elem);
+                AnnotatedTypeMirror type = asMemberOfImpl(types, atypeFactory, t, elem, tree);
                 if (!ElementUtils.isStatic(elem)) {
-                    atypeFactory.postAsMemberOf(type, t, elem);
+                    atypeFactory.postAsMemberOf(type, t, elem, tree);
                 }
                 return type;
         }
@@ -238,7 +243,8 @@ public class AnnotatedTypes {
             final Types types,
             final AnnotatedTypeFactory atypeFactory,
             final AnnotatedTypeMirror of,
-            final Element member) {
+            final Element member,
+            final Tree tree) {
         final AnnotatedTypeMirror memberType = atypeFactory.getAnnotatedType(member);
 
         if (ElementUtils.isStatic(member)) {
@@ -255,13 +261,18 @@ public class AnnotatedTypes {
                 return memberType;
             case TYPEVAR:
                 return asMemberOf(
-                        types, atypeFactory, ((AnnotatedTypeVariable) of).getUpperBound(), member);
+                        types,
+                        atypeFactory,
+                        ((AnnotatedTypeVariable) of).getUpperBound(),
+                        member,
+                        tree);
             case WILDCARD:
                 return asMemberOf(
                         types,
                         atypeFactory,
                         ((AnnotatedWildcardType) of).getExtendsBound().deepCopy(),
-                        member);
+                        member,
+                        tree);
             case INTERSECTION:
             case UNION:
             case DECLARED:

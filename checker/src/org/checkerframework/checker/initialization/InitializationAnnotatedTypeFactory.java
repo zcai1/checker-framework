@@ -163,7 +163,7 @@ public abstract class InitializationAnnotatedTypeFactory<
      * Returns whether or not {@code field} has the invariant annotation.
      *
      * <p>This method is a convenience method for {@link
-     * #hasFieldInvariantAnnotation(AnnotatedTypeMirror)}.
+     * #hasFieldInvariantAnnotation(AnnotatedTypeMirror, VariableElement)}.
      *
      * <p>If the {@code field} is a type variable, this method returns true if any possible
      * instantiation of the type parameter could have the invariant annotation. See {@link
@@ -174,7 +174,8 @@ public abstract class InitializationAnnotatedTypeFactory<
      */
     protected final boolean hasFieldInvariantAnnotation(VariableTree field) {
         AnnotatedTypeMirror type = getAnnotatedType(field);
-        return hasFieldInvariantAnnotation(type);
+        VariableElement fieldElement = TreeUtils.elementFromDeclaration(field);
+        return hasFieldInvariantAnnotation(type, fieldElement);
     }
 
     /**
@@ -187,7 +188,8 @@ public abstract class InitializationAnnotatedTypeFactory<
      * @param type of field that might have invariant annotation
      * @return whether or not the type has the invariant annotation
      */
-    protected abstract boolean hasFieldInvariantAnnotation(AnnotatedTypeMirror type);
+    protected abstract boolean hasFieldInvariantAnnotation(
+            AnnotatedTypeMirror type, VariableElement fieldElement);
 
     /** Returns a {@link UnderInitialization} annotation with a given type frame. */
     public AnnotationMirror createFreeAnnotation(TypeMirror typeFrame) {
@@ -337,8 +339,8 @@ public abstract class InitializationAnnotatedTypeFactory<
      */
     @Override
     public void postAsMemberOf(
-            AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element) {
-        super.postAsMemberOf(type, owner, element);
+            AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element, Tree tree) {
+        super.postAsMemberOf(type, owner, element, tree);
 
         if (element.getKind().isField()) {
             Collection<? extends AnnotationMirror> declaredFieldAnnotations =
@@ -356,7 +358,7 @@ public abstract class InitializationAnnotatedTypeFactory<
      * @see #computeFieldAccessType
      * @see #getAnnotatedTypeLhs(Tree)
      */
-    private boolean computingAnnotatedTypeMirrorOfLHS = false;
+    protected boolean computingAnnotatedTypeMirrorOfLHS = false;
 
     @Override
     public AnnotatedTypeMirror getAnnotatedTypeLhs(Tree lhsTree) {
