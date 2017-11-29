@@ -62,6 +62,7 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.TypeVariable;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic.Kind;
+import org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey;
 import org.checkerframework.dataflow.analysis.FlowExpressions;
 import org.checkerframework.dataflow.analysis.FlowExpressions.Receiver;
 import org.checkerframework.dataflow.analysis.TransferResult;
@@ -1708,7 +1709,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
     public Void visitInstanceOf(InstanceOfTree node, Void p) {
         Tree typeTree = node.getType();
         AnnotatedTypeMirror instanceOfType = atypeFactory.getAnnotatedType(typeTree);
-        checkQualifiedLocation(instanceOfType, typeTree, TypeUseLocation.INSTANCEOF);
+        checkQualifiedLocation(instanceOfType, typeTree, TypeUseLocation.INSTANCE_OF);
         validateTypeOf(node.getType());
         return super.visitInstanceOf(node, p);
     }
@@ -2657,23 +2658,37 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
             AnnotatedTypeMirror type, Tree tree, TypeUseLocation location) {
         for (AnnotationMirror am : type.getAnnotations()) {
             Element elementOfAnnotation = am.getAnnotationType().asElement();
-            QualifiedLocations declLocations =
+            QualifiedLocations qualifiedLocations =
                     elementOfAnnotation.getAnnotation(QualifiedLocations.class);
-            // Null means no QualifiedLocations annotation => Any use is correct.
-            if (declLocations != null) {
-                Set<TypeUseLocation> set = new HashSet<>(Arrays.asList(declLocations.value()));
-                if (set.contains(TypeUseLocation.ALL)) continue;
-                if (((location == TypeUseLocation.EXPLICIT_LOWER_BOUND)
-                                || (location == TypeUseLocation.IMPLICIT_LOWER_BOUND))
-                        && set.contains(TypeUseLocation.LOWER_BOUND)) {
-                    // TypeUseLocation.LOWER_BOUND already covers both explicit and implicit lower bounds, so no need to check containment
+            // Null means no QualifiedLocations annotation => Any usage is correct.
+            if (qualifiedLocations == null) {
+                continue;
+            }
+
+            Set<TypeUseLocation> set = new HashSet<>(Arrays.asList(qualifiedLocations.value()));
+
+            if (set.contains(TypeUseLocation.ALL)) continue;
+
+            if (set.contains(TypeUseLocation.LOWER_BOUND)) {
+                if (location == TypeUseLocation.EXPLICIT_LOWER_BOUND
+                        || location == TypeUseLocation.IMPLICIT_LOWER_BOUND) {
+                    // TypeUseLocation.LOWER_BOUND already covers both explicit and implicit lower
+                    // bounds, so no need to check
                     continue;
-                } else if (((location == TypeUseLocation.EXPLICIT_UPPER_BOUND)
-                                || (location == TypeUseLocation.IMPLICIT_UPPER_BOUND))
-                        && set.contains(TypeUseLocation.UPPER_BOUND)) {
-                    // TypeUseLocation.UPPER_BOUND already covers both explicit and implicit lower bounds, so no need to check containment
+                }
+            }
+
+            if (set.contains(TypeUseLocation.UPPER_BOUND)) {
+                // TypeUseLocation.UPPER_BOUND already covers both explicit and implicit upper
+                // bounds, so no need to check
+                if (location == TypeUseLocation.EXPLICIT_UPPER_BOUND
+                        || location == TypeUseLocation.IMPLICIT_UPPER_BOUND) {
                     continue;
-                } else if (!set.contains(location)) reportLocationError(type, tree, location);
+                }
+            }
+
+            if (!set.contains(location)) {
+                reportLocationError(type, tree, location);
             }
         }
     }
@@ -2681,8 +2696,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
     private void reportLocationError(
             AnnotatedTypeMirror type, Tree tree, TypeUseLocation location) {
         @SuppressWarnings("CompilerMessages")
-        /*@CompilerMessageKey*/ String errorMessage =
-                location.toString().toLowerCase() + ".annotation.forbidden";
+        @CompilerMessageKey String errorMessage = location.toString().toLowerCase() + ".annotation.forbidden";
         checker.report(Result.failure(errorMessage, type.getAnnotations(), type.toString()), tree);
     }
 

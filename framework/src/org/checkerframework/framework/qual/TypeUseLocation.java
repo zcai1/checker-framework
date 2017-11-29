@@ -84,15 +84,6 @@ public enum TypeUseLocation {
     /** Apply default annotations to unannotated type declarations: {@code @HERE class Demo{}} */
     TYPE_DECLARATION,
 
-    /**
-     * Represents type argument location in parameterized type {@code List<@TA1 ArrayList<@TA2
-     * String>>}
-     */
-    TYPE_ARGUMENT,
-
-    /** Represents array component location {@code @AC2 String [] @AC1 []} */
-    ARRAY_COMPONENT,
-
     /** Represents extends location of a class or interface: {@code class B extends @HERE A {}} */
     EXTENDS,
 
@@ -103,7 +94,7 @@ public enum TypeUseLocation {
     THROWS,
 
     /** Represents instanceof location: {@code o instanceof @HERE Object {}} */
-    INSTANCEOF,
+    INSTANCE_OF,
 
     /** Represents new expression location: {@code new @HERE Object()} */
     NEW,

@@ -200,10 +200,6 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
                     : "size mismatch for type arguments: " + type + " and " + typeArgTree;
 
             for (int i = 0; i < tatypes.size(); ++i) {
-                visitor.checkQualifiedLocation(
-                        tatypes.get(i),
-                        typeArgTree.getTypeArguments().get(i),
-                        TypeUseLocation.TYPE_ARGUMENT);
                 scan(tatypes.get(i), typeArgTree.getTypeArguments().get(i));
             }
         }
@@ -305,7 +301,6 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
         AnnotatedTypeMirror comp = type;
         do {
             comp = ((AnnotatedArrayType) comp).getComponentType();
-            visitor.checkQualifiedLocation(comp, tree, TypeUseLocation.ARRAY_COMPONENT);
         } while (comp.getKind() == TypeKind.ARRAY);
 
         if (comp.getKind() == TypeKind.DECLARED
@@ -508,26 +503,22 @@ public class BaseTypeValidator extends AnnotatedTypeScanner<Void, Tree> implemen
 
         BoundType boundType = BoundTypeUtil.getBoundType(boundedType, atypeFactory);
 
-        if (boundType.isOneOf(BoundType.UPPER)) {
-            //Explicit upper bound
+        // Upper bounds
+        if (BoundTypeUtil.isOneOf(boundType, BoundType.UPPER)) {
+            // Explicit upper bound
             visitor.checkQualifiedLocation(upperBound, p, TypeUseLocation.EXPLICIT_UPPER_BOUND);
-        } else if (boundType.isOneOf(BoundType.UNBOUND, BoundType.LOWER, BoundType.UNKNOWN)) {
+        } else {
             // Implicit upper bound
             visitor.checkQualifiedLocation(upperBound, p, TypeUseLocation.IMPLICIT_UPPER_BOUND);
-        } else {
-            // Dead code
-            visitor.checkQualifiedLocation(upperBound, p, TypeUseLocation.UPPER_BOUND);
         }
 
-        if (boundType.isOneOf(BoundType.LOWER)) {
+        // Lower bounds
+        if (BoundTypeUtil.isOneOf(boundType, BoundType.LOWER)) {
             // Explicit lower bound
             visitor.checkQualifiedLocation(lowerBound, p, TypeUseLocation.EXPLICIT_LOWER_BOUND);
-        } else if (boundType.isOneOf(BoundType.UNBOUND, BoundType.UPPER, BoundType.UNKNOWN)) {
+        } else {
             // Implicit lower bound
             visitor.checkQualifiedLocation(lowerBound, p, TypeUseLocation.IMPLICIT_LOWER_BOUND);
-        } else {
-            // Dead code
-            visitor.checkQualifiedLocation(lowerBound, p, TypeUseLocation.LOWER_BOUND);
         }
     }
 

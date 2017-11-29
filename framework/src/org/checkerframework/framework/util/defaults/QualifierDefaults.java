@@ -7,10 +7,8 @@ import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
-import com.sun.source.tree.TypeParameterTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
-import com.sun.tools.javac.code.Type.WildcardType;
 import java.lang.annotation.Annotation;
 import java.util.EnumSet;
 import java.util.IdentityHashMap;
@@ -21,7 +19,6 @@ import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.PackageElement;
-import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.Elements;
@@ -41,16 +38,16 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedWildcard
 import org.checkerframework.framework.type.GenericAnnotatedTypeFactory;
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.visitor.AnnotatedTypeScanner;
+import org.checkerframework.framework.util.BoundType;
+import org.checkerframework.framework.util.BoundTypeUtil;
 import org.checkerframework.framework.util.CheckerMain;
 import org.checkerframework.framework.util.PluginUtil;
 import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
-import org.checkerframework.javacutil.CollectionUtils;
 import org.checkerframework.javacutil.ElementUtils;
 import org.checkerframework.javacutil.ErrorReporter;
 import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.TreeUtils;
-import org.checkerframework.javacutil.TypesUtils;
 
 /**
  * Determines the default qualifiers on a type. Default qualifiers are specified via the {@link
@@ -86,12 +83,6 @@ public class QualifierDefaults {
 
     private final DefaultSet checkedCodeDefaults = new DefaultSet();
     private final DefaultSet uncheckedCodeDefaults = new DefaultSet();
-
-    /** Mapping from an Element to the source Tree of the declaration. */
-    private static final int CACHE_SIZE = 300;
-
-    protected static final Map<Element, BoundType> elementToBoundType =
-            CollectionUtils.createLRUCache(CACHE_SIZE);
 
     /**
      * Defaults that apply for a certain Element. On the one hand this is used for caching (an
@@ -931,7 +922,8 @@ public class QualifierDefaults {
                     case IMPLICIT_LOWER_BOUND:
                         {
                             if (isLowerBound
-                                    && boundType.isOneOf(BoundType.UNBOUNDED, BoundType.UPPER)) {
+                                    && BoundTypeUtil.isOneOf(
+                                            boundType, BoundType.UNBOUNDED, BoundType.UPPER)) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -939,7 +931,7 @@ public class QualifierDefaults {
 
                     case EXPLICIT_LOWER_BOUND:
                         {
-                            if (isLowerBound && boundType.isOneOf(BoundType.LOWER)) {
+                            if (isLowerBound && BoundTypeUtil.isOneOf(boundType, BoundType.LOWER)) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -956,14 +948,15 @@ public class QualifierDefaults {
                     case IMPLICIT_UPPER_BOUND:
                         {
                             if (isUpperBound
-                                    && boundType.isOneOf(BoundType.UNBOUNDED, BoundType.LOWER)) {
+                                    && BoundTypeUtil.isOneOf(
+                                            boundType, BoundType.UNBOUNDED, BoundType.LOWER)) {
                                 addAnnotation(t, qual);
                             }
                             break;
                         }
                     case EXPLICIT_UPPER_BOUND:
                         {
-                            if (isUpperBound && boundType.isOneOf(BoundType.UPPER)) {
+                            if (isUpperBound && BoundTypeUtil.isOneOf(boundType, BoundType.UPPER)) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -1046,7 +1039,7 @@ public class QualifierDefaults {
                 final boolean prevIsLowerBound = isLowerBound;
                 final BoundType prevBoundType = boundType;
 
-                boundType = getBoundType(boundedType, atypeFactory);
+                boundType = BoundTypeUtil.getBoundType(boundedType, atypeFactory);
 
                 try {
                     isLowerBound = true;
@@ -1068,137 +1061,5 @@ public class QualifierDefaults {
                 }
             }
         }
-    }
-
-    /**
-     * Specifies whether the type variable or wildcard has an explicit upper bound (UPPER), an
-     * explicit lower bound (LOWER), or no explicit bounds (UNBOUNDED).
-     */
-    enum BoundType {
-
-        /** Indicates an upper bounded type variable or wildcard */
-        UPPER,
-
-        /** Indicates a lower bounded type variable or wildcard */
-        LOWER,
-
-        /**
-         * Neither bound is specified, BOTH are implicit. (If a type variable is declared in
-         * bytecode and the type of the upper bound is Object, then the checker assumes that the
-         * bound was not explicitly written in source code.)
-         */
-        UNBOUNDED;
-
-        public boolean isOneOf(final BoundType... choices) {
-            for (final BoundType choice : choices) {
-                if (this == choice) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-    }
-
-    /**
-     * @param type the type whose boundType is returned. type must be an AnnotatedWildcardType or
-     *     AnnotatedTypeVariable.
-     * @return the boundType for type
-     */
-    private static BoundType getBoundType(
-            final AnnotatedTypeMirror type, final AnnotatedTypeFactory typeFactory) {
-        if (type instanceof AnnotatedTypeVariable) {
-            return getTypeVarBoundType((AnnotatedTypeVariable) type, typeFactory);
-        }
-
-        if (type instanceof AnnotatedWildcardType) {
-            return getWildcardBoundType((AnnotatedWildcardType) type, typeFactory);
-        }
-
-        ErrorReporter.errorAbort("Unexpected type kind: type=" + type);
-        return null; // dead code
-    }
-
-    /** @return the bound type of the input typeVar */
-    private static BoundType getTypeVarBoundType(
-            final AnnotatedTypeVariable typeVar, final AnnotatedTypeFactory typeFactory) {
-        return getTypeVarBoundType(
-                (TypeParameterElement) typeVar.getUnderlyingType().asElement(), typeFactory);
-    }
-
-    /** @return the boundType (UPPER or UNBOUNDED) of the declaration of typeParamElem */
-    // Results are cached in {@link elementToBoundType}.
-    private static BoundType getTypeVarBoundType(
-            final TypeParameterElement typeParamElem, final AnnotatedTypeFactory typeFactory) {
-        final BoundType prev = elementToBoundType.get(typeParamElem);
-        if (prev != null) {
-            return prev;
-        }
-
-        TreePath declaredTypeVarEle = typeFactory.getTreeUtils().getPath(typeParamElem);
-        Tree typeParamDecl = declaredTypeVarEle == null ? null : declaredTypeVarEle.getLeaf();
-
-        final BoundType boundType;
-        if (typeParamDecl == null) {
-            // This is not only for elements from binaries, but also
-            // when the compilation unit is no-longer available.
-            if (typeParamElem.getBounds().size() == 1
-                    && TypesUtils.isObject(typeParamElem.getBounds().get(0))) {
-                // If the bound was Object, then it may or may not have been explicitly written.
-                // Assume that it was not.
-                boundType = BoundType.UNBOUNDED;
-            } else {
-                // The bound is not Object, so it must have been explicitly written and thus the
-                // type variable has an upper bound.
-                boundType = BoundType.UPPER;
-            }
-
-        } else {
-            if (typeParamDecl.getKind() == Tree.Kind.TYPE_PARAMETER) {
-                final TypeParameterTree tptree = (TypeParameterTree) typeParamDecl;
-
-                List<? extends Tree> bnds = tptree.getBounds();
-                if (bnds != null && !bnds.isEmpty()) {
-                    boundType = BoundType.UPPER;
-                } else {
-                    boundType = BoundType.UNBOUNDED;
-                }
-            } else {
-                ErrorReporter.errorAbort(
-                        "Unexpected tree type for typeVar Element:\n"
-                                + "typeParamElem="
-                                + typeParamElem
-                                + "\n"
-                                + typeParamDecl);
-                boundType = null; // dead code
-            }
-        }
-
-        elementToBoundType.put(typeParamElem, boundType);
-        return boundType;
-    }
-
-    /**
-     * @return the BoundType of annotatedWildcard. If it is unbounded, use the type parameter to
-     *     which its an argument.
-     */
-    public static BoundType getWildcardBoundType(
-            final AnnotatedWildcardType annotatedWildcard, final AnnotatedTypeFactory typeFactory) {
-
-        final WildcardType wildcard = (WildcardType) annotatedWildcard.getUnderlyingType();
-
-        final BoundType boundType;
-        if (wildcard.isUnbound() && wildcard.bound != null) {
-            boundType =
-                    getTypeVarBoundType(
-                            (TypeParameterElement) wildcard.bound.asElement(), typeFactory);
-
-        } else {
-            // note: isSuperBound will be true for unbounded and lowers, but the unbounded case is
-            // already handled
-            boundType = wildcard.isSuperBound() ? BoundType.LOWER : BoundType.UPPER;
-        }
-
-        return boundType;
     }
 }
