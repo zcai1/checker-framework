@@ -324,15 +324,19 @@ public abstract class ViewpointAdapter<T> {
         AnnotatedDeclaredType decltype = res.first;
         int foundindex = res.second;
 
-        if (!decltype.wasRaw()) {
-            // Explicitly provide actual type arguments
-            List<AnnotatedTypeMirror> tas = decltype.getTypeArguments();
-            // return a copy, as we want to modify the type later.
-            return tas.get(foundindex).shallowCopy(true);
-        } else {
-            // Type arguments not explicitly provided => use upper bound of var
-            return var.getUpperBound();
-        }
+        //        if (!decltype.wasRaw()) {
+        //            // Explicitly provide actual type arguments
+        //            List<AnnotatedTypeMirror> tas = decltype.getTypeArguments();
+        //            // return a copy, as we want to modify the type later.
+        //            return tas.get(foundindex).shallowCopy(true);
+        //        } else {
+        //            // Type arguments not explicitly provided => use upper bound of var
+        //            return var.getUpperBound();
+        //        }
+
+        List<AnnotatedTypeMirror> tas = decltype.getTypeArguments();
+        // return a copy, as we want to modify the type later.
+        return tas.get(foundindex).shallowCopy(true);
     }
 
     /**
