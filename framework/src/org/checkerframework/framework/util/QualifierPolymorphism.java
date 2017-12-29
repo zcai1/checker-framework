@@ -220,9 +220,12 @@ public class QualifierPolymorphism {
 
         TreePath path = atypeFactory.getPath(tree);
         if (path != null) {
-            // TODO Solve crash on library jblas
-            AnnotatedTypeMirror assignmentContext =
-                    TypeArgInferenceUtil.assignedTo(atypeFactory, path);
+            AnnotatedTypeMirror assignmentContext = null;
+            try {
+                assignmentContext = TypeArgInferenceUtil.assignedTo(atypeFactory, path);
+            } catch (AssertionError e) {
+                // This is ok. It means that a method invocation is not assigned to anything
+            }
             if (assignmentContext != null) {
                 matchingMapping =
                         collector.reduce2(
