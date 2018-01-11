@@ -1341,7 +1341,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
     protected void viewpointAdaptMember(
             AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element) {
-        if (viewpointAdapter != null && viewpointAdapter.shouldBeAdapted(type, element)) {
+        if (viewpointAdapter != null && viewpointAdapter.shouldAdaptMember(type, element)) {
             AnnotatedTypeMirror decltype = this.getAnnotatedType(element);
             AnnotatedTypeMirror combinedType =
                     this.viewpointAdapter.combineTypeWithType(owner, decltype, this);

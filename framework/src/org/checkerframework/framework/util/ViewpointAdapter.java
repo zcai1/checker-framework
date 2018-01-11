@@ -3,10 +3,7 @@ package org.checkerframework.framework.util;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.TypeParameterElement;
+import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import org.checkerframework.framework.type.AnnotatedTypeFactory;
@@ -14,6 +11,7 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedArrayType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedDeclaredType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedNullType;
+import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedPrimitiveType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedTypeVariable;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedWildcardType;
 import org.checkerframework.framework.type.AnnotatedTypeReplacer;
@@ -87,7 +85,14 @@ public abstract class ViewpointAdapter<T> {
      * @param element element whose type is being considered to be adapted or not
      * @return true if type or element should not be adapted.
      */
-    public boolean shouldBeAdapted(AnnotatedTypeMirror type, Element element) {
+    public boolean shouldAdaptMember(AnnotatedTypeMirror type, Element element) {
+        if (type.getKind() != TypeKind.DECLARED && type.getKind() != TypeKind.ARRAY) {
+            return false;
+        }
+        if (element.getKind() == ElementKind.LOCAL_VARIABLE
+                || element.getKind() == ElementKind.PARAMETER) {
+            return false;
+        }
         return true;
     }
 
@@ -126,7 +131,15 @@ public abstract class ViewpointAdapter<T> {
     protected AnnotatedTypeMirror combineModifierWithType(
             T recvModifier, AnnotatedTypeMirror decl, AnnotatedTypeFactory f) {
         if (decl.getKind().isPrimitive()) {
-            return decl;
+            // TODO Verify this is correct
+            AnnotatedPrimitiveType apt = (AnnotatedPrimitiveType) decl.shallowCopy();
+
+            T declModifier = getModifier(apt, f);
+            T resultModifier = combineModifierWithModifier(recvModifier, declModifier, f);
+
+            apt.replaceAnnotation(getAnnotationFromModifier(resultModifier));
+
+            return apt;
         } else if (decl.getKind() == TypeKind.TYPEVAR) {
             if (!isTypeVarExtends) {
                 isTypeVarExtends = true;

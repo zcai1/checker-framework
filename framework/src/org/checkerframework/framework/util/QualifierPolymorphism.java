@@ -221,11 +221,8 @@ public class QualifierPolymorphism {
         TreePath path = atypeFactory.getPath(tree);
         if (path != null) {
             AnnotatedTypeMirror assignmentContext = null;
-            try {
-                assignmentContext = TypeArgInferenceUtil.assignedTo(atypeFactory, path);
-            } catch (AssertionError e) {
-                // This is ok. It means that a method invocation is not assigned to anything
-            }
+            assignmentContext = TypeArgInferenceUtil.assignedTo(atypeFactory, path);
+
             if (assignmentContext != null) {
                 matchingMapping =
                         collector.reduce2(
@@ -556,6 +553,9 @@ public class QualifierPolymorphism {
                     result.put(poly, type.getAnnotations());
                 } else if (actualType.hasAnnotation(poly)) {
                     AnnotationMirror typeQual = type.getAnnotationInHierarchy(top);
+                    result.put(poly, Collections.singleton(typeQual));
+                } else if (type.hasAnnotation(poly)) {
+                    AnnotationMirror typeQual = actualType.getAnnotationInHierarchy(top);
                     result.put(poly, Collections.singleton(typeQual));
                 }
             }
