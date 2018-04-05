@@ -3,8 +3,17 @@ package org.checkerframework.framework.stub;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.StubUnit;
-import com.github.javaparser.ast.body.*;
-import com.github.javaparser.ast.type.*;
+import com.github.javaparser.ast.body.BodyDeclaration;
+import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.type.VoidType;
+import com.github.javaparser.ast.type.WildcardType;
 import com.github.javaparser.ast.visitor.SimpleVoidVisitor;
 import java.io.File;
 import java.io.IOException;
@@ -304,19 +313,9 @@ public class StubUtil {
         }
 
         @Override
-        public void visit(ReferenceType n, Void arg) {
-            n.getElementType().accept(this, arg);
-            for (int i = 0; i < n.getArrayLevel(); ++i) {
-                sb.append("[]");
-            }
-        }
-
-        @Override
         public void visit(com.github.javaparser.ast.type.ArrayType n, Void arg) {
             n.getComponentType().accept(this, arg);
-            for (int i = 0; i < n.getArrayLevel(); ++i) {
-                sb.append("[]");
-            }
+            sb.append("[]");
         }
 
         @Override

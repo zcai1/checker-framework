@@ -6,7 +6,6 @@ import java.util.Collection;
 import java.util.Collections;
 import javax.lang.model.element.ExecutableElement;
 import org.checkerframework.dataflow.util.HashCodeUtils;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.TreeUtils;
 
 /**
@@ -15,19 +14,17 @@ import org.checkerframework.javacutil.TreeUtils;
  * <pre>
  *   <em>expression</em> . <em>method</em> ()
  * </pre>
- *
- * @author Stefan Heule
  */
 public class MethodAccessNode extends Node {
 
-    protected ExpressionTree tree;
-    protected ExecutableElement method;
-    protected Node receiver;
+    protected final ExpressionTree tree;
+    protected final ExecutableElement method;
+    protected final Node receiver;
 
     // TODO: add method to get modifiers (static, access level, ..)
 
     public MethodAccessNode(ExpressionTree tree, Node receiver) {
-        super(InternalUtils.typeOf(tree));
+        super(TreeUtils.typeOf(tree));
         assert TreeUtils.isMethodAccess(tree);
         this.tree = tree;
         this.method = (ExecutableElement) TreeUtils.elementFromUse(tree);

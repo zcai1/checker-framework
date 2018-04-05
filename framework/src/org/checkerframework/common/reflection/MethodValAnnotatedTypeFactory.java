@@ -28,18 +28,17 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
-import org.checkerframework.framework.util.AnnotationBuilder;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.TreeUtils;
 
 public class MethodValAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     private final AnnotationMirror METHODVAL_BOTTOM =
-            AnnotationUtils.fromClass(elements, MethodValBottom.class);
+            AnnotationBuilder.fromClass(elements, MethodValBottom.class);
     private final AnnotationMirror UNKNOWN_METHOD =
-            AnnotationUtils.fromClass(elements, UnknownMethod.class);
+            AnnotationBuilder.fromClass(elements, UnknownMethod.class);
 
     private static final int UNKNOWN_PARAM_LENGTH = -1;
 
@@ -272,14 +271,14 @@ public class MethodValAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         }
 
         private boolean isGetConstructorMethodInovaction(MethodInvocationTree tree) {
-            if (getDeclAnnotation(InternalUtils.symbol(tree), GetConstructor.class) != null) {
+            if (getDeclAnnotation(TreeUtils.elementFromTree(tree), GetConstructor.class) != null) {
                 return true;
             }
             return false;
         }
 
         private boolean isGetMethodMethodInovaction(MethodInvocationTree tree) {
-            if (getDeclAnnotation(InternalUtils.symbol(tree), GetMethod.class) != null) {
+            if (getDeclAnnotation(TreeUtils.elementFromTree(tree), GetMethod.class) != null) {
                 return true;
             }
             return false;
@@ -349,8 +348,6 @@ public class MethodValAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 /**
  * An object that represents a the tuple that identifies a method signature: (fully qualified class
  * name, method name, number of parameters)
- *
- * @author smillst
  */
 class MethodSignature {
     String className;

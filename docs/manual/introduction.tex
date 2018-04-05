@@ -23,14 +23,18 @@ The Checker Framework comes with checkers for specific types of errors:
   \ahrefloc{map-key-checker}{Map Key Checker} to track which values are
   keys in a map (see \chapterpageref{map-key-checker})
 \item
+  \ahrefloc{optional-checker}{Optional Checker} for errors in using the
+  \sunjavadoc{java/util/Optional.html}{Optional} type (see
+  \chapterpageref{optional-checker})
+\item
   \ahrefloc{interning-checker}{Interning Checker} for errors in equality
   testing and interning (see \chapterpageref{interning-checker})
 \item
   \ahrefloc{lock-checker}{Lock Checker} for concurrency and lock errors
   (see \chapterpageref{lock-checker})
-%\item
-%  \ahrefloc{index-checker}{Index Checker} for array accesses
-%  (see \chapterpageref{index-checker})
+\item
+  \ahrefloc{index-checker}{Index Checker} for array accesses
+  (see \chapterpageref{index-checker})
 \item
   \ahrefloc{fenum-checker}{Fake Enum Checker} to allow type-safe fake enum
   patterns and type aliases or typedefs (see \chapterpageref{fenum-checker})
@@ -83,9 +87,6 @@ The Checker Framework comes with checkers for specific types of errors:
 \item
   \ahrefloc{aliasing-checker}{Aliasing Checker} to identify whether
   expressions have aliases (see \chapterpageref{aliasing-checker})
-\item
-  \ahrefloc{linear-checker}{Linear Checker} to control aliasing and prevent
-  re-use (see \chapterpageref{linear-checker})
 \item
   \ahrefloc{subtyping-checker}{Subtyping Checker} for customized checking without
   writing any code (see \chapterpageref{subtyping-checker})
@@ -182,9 +183,6 @@ synonyms.
 
 \begin{sloppypar}
 This section describes how to install the Checker Framework.
-(If you wish to use the Checker Framework from Eclipse, see the Checker
-Framework Eclipse Plugin webpage instead:
-\url{https://checkerframework.org/eclipse/}.)
 (If you wish to try the Checker Framework without installing it, use the
 \href{http://eisop.uwaterloo.ca/live/}{Checker Framework Live Demo} webpage.)
 \end{sloppypar}
@@ -210,7 +208,7 @@ optional step.
   %BEGIN LATEX
   \\
   %END LATEX
-  \url{https://checkerframework.org/checker-framework-2.1.14.zip}
+  \url{https://checkerframework.org/checker-framework-2.4.0.zip}
 
 \item
   Unzip it to create a \code{checker-framework} directory.
@@ -239,7 +237,7 @@ That's all there is to it!  Now you are ready to start using the checkers.
 We recommend that you work through the
 \ahreforurl{https://checkerframework.org/tutorial/}{Checker
 Framework tutorial}, which walks you through how to use the Checker
-Framework in Eclipse or on
+Framework on
 the command line.
 There is also a
 \ahreforurl{https://github.com/glts/safer-spring-petclinic/wiki}{Nullness Checker
@@ -254,8 +252,8 @@ instructions for using a checker appear in Chapter~\ref{using-a-checker}.
 
 This section gives a very simple example of running the Checker Framework.
 There is also a \ahreforurl{https://checkerframework.org/tutorial/}{tutorial}
-that gives more extensive instructions for using the Checker Framework in
-Eclipse or on the command line,
+that gives more extensive instructions for using the Checker Framework
+on the command line,
 and a
 \ahreforurl{https://github.com/glts/safer-spring-petclinic/wiki}{Nullness Checker
 tutorial} by David B\"urgin.
@@ -408,7 +406,7 @@ Additional topics that apply to all checkers are covered later in the manual:
 
 Finally, there is a
 \ahreforurl{https://checkerframework.org/tutorial/}{tutorial}
-that walks you through using the Checker Framework in Eclipse or on the
+that walks you through using the Checker Framework on the
 command line, and a separate
 \ahreforurl{https://github.com/glts/safer-spring-petclinic/wiki}{Nullness
   Checker tutorial} by David B\"urgin.
@@ -470,7 +468,7 @@ option.
 A concrete example (using the Nullness Checker) is:
 
 \begin{Verbatim}
-  javac -processor NullnessChecker MyFile.java
+  javac -processor nullness MyFile.java
 \end{Verbatim}
 
 \noindent
@@ -503,6 +501,74 @@ will interfere with type-checking of clients that use your code.
 Therefore, it is strongly recommended that whenever you are creating
 \<.class> files that will be distributed or compiled against, you run the
 type-checkers for all the annotations that your have written.
+
+
+\subsection{Using annotated libraries\label{annotated-libraries-using}}
+
+When your code uses a library that is not currently being compiled, the
+Checker Framework looks up the library's annotations in its class files.
+
+Some projects are already distributed with type annotations by their
+maintainers, so you do not need to do anything special.
+% such as Guava,
+% \href{https://mernst.github.io/plume-lib/}{plume-lib},
+% and
+% \href{http://plse.cs.washington.edu/daikon/}{Daikon}
+Over time, this should become more common.
+
+For some other libraries, the Checker Framework developers have provided an
+annotated version of the library.  During type-checking, you should use the
+annotated version of the library to improve type-checking results (to issue
+fewer false positive warnings).  When doing ordinary compilation or while
+running your code, you can use either the annotated library or the regular
+distributed version of the library --- they behave identically.
+
+The annotated libraries appear in
+\ahref{http://search.maven.org/#search|gav|1|g:"org.checkerframework.annotatedlib"}{the
+  \<org.checkerframework.annotatedlib> group in the Central Repository}.
+
+\begin{itemize}
+\item
+If your project stores \<.jar> files locally, then download the \<.jar> file
+from the Central Repository.
+
+\item
+If your project manages dependencies using a tool such as Gradle or Maven,
+then update your buildfile to use the \<org.checkerframework.annotatedlib>
+group.  For example, in \<build.gradle>, change
+
+\begin{Verbatim}
+  api group: 'org.apache.bcel', name: 'bcel', version: '6.2'
+\end{Verbatim}
+
+\noindent
+to
+
+\begin{Verbatim}
+  api group: 'org.checkerframework.annotatedlib', name: 'bcel', version: '6.2'
+\end{Verbatim}
+
+\noindent
+Use the same version number.  (Sometimes you will use a slightly larger
+number, if the Checker Framework developers have improved the type
+annotations since the last release by the upstream maintainers.)  If a
+newer version of the upstream library is available, then
+\ahrefloc{reporting-bugs}{open an issue} requesting that the
+\<org.checkerframework.annotatedlib> version be updated.
+\end{itemize}
+
+There are two special cases.
+The annotated JDK is automatically put on your
+classpath; you don't have to do anything special for it.
+For the Javadoc classes in the JDK's com.sun.javadoc package,
+% are not exposed by ct.sym and therefore cannot be part of an
+% annotated JDK
+use the stub file \<checker/resources/javadoc.astub>.
+
+If a library you wish to use is not available, then you can request that it
+be annotated, or you can volunteer to write the annotations (see
+\chapterpageref{annotating-libraries}), which will help you and all other
+Checker Framework users.
 
 
 \subsection{Distributing your annotated project\label{distributing}}
@@ -758,6 +824,10 @@ checker is an ``annotation processor''.
   whenever a compiler warning/error is produced. Useful when debugging
   the compiler or a checker.
 \end{itemize}
+
+The Checker Framework does not support \<-source 1.4> or earlier.  You must
+supply \<-source 1.5> or later, or no \<-source> command-line argument,
+when running \<javac>.
 
 
 \subsection{Checker auto-discovery\label{checker-auto-discovery}}
@@ -1202,7 +1272,6 @@ annotations at all are needed on type parameters such as \code{E} in \<MultiSet>
 \subsection{Annotations on constructor invocations\label{annotations-on-constructor-invocations}}
 
 %% I want to get rid of this syntax.
-%% However, @Linear provides a compelling use case.
 
 In the checkers distributed with the Checker Framework, an annotation on a
 constructor invocation is equivalent to a cast on a constructor result.
@@ -1270,7 +1339,7 @@ verify your reasoning.
 \begin{enumerate}
 \item
   Write an explanation of why your code is correct and it
-  never suffers the error at run time.  In other words, this is a proof
+  never suffers the error at run time.  In other words, this is an English proof
   that the type-checker's warning is incorrect.
 
   Don't skip any steps in your proof.
@@ -1346,6 +1415,8 @@ verify your reasoning.
   steps), then that is a weakness in the type-checker.  First, double-check
   your reasoning.  Then, suppress the warning, along with a comment
   explaining your reasoning (\chapterpageref{suppressing-warnings}).
+  The comment is an excerpt from your English proof, and the proof guides
+  you to the best place to suppress the warning.
   Finally, please submit a bug report so that the checker can be improved
   in the future (Section~\ref{reporting-bugs}).
 
@@ -1355,6 +1426,8 @@ If you have trouble understanding a Checker Framework warning message, you
 can search for its text in this manual.  Also see
 Section~\ref{common-problems-typechecking} and
 Chapter~\ref{troubleshooting}, Troubleshooting.
+In particular, Section~\ref{common-problems-typechecking} explains this
+same methodology in different words.
 
 
 % LocalWords:  NonNull zipfile processor classfiles annotationname javac htoc

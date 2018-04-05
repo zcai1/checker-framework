@@ -8,7 +8,6 @@ import javax.lang.model.type.TypeMirror;
  * edge and one for 'else'. The result of {@code getRegularStore} will be the least upper bound of
  * the two underlying stores.
  *
- * @author Stefan Heule
  * @param <S> the {@link Store} used to keep track of intermediate results
  */
 public class ConditionalTransferResult<A extends AbstractValue<A>, S extends Store<S>>
@@ -17,10 +16,10 @@ public class ConditionalTransferResult<A extends AbstractValue<A>, S extends Sto
     private final boolean storeChanged;
 
     /** The 'then' result store. */
-    protected S thenStore;
+    protected final S thenStore;
 
     /** The 'else' result store. */
-    protected S elseStore;
+    protected final S elseStore;
 
     /**
      * Create a {@code ConditionalTransferResult} with {@code thenStore} as the resulting store if
@@ -40,10 +39,7 @@ public class ConditionalTransferResult<A extends AbstractValue<A>, S extends Sto
      * objects is transfered to this class.
      */
     public ConditionalTransferResult(A value, S thenStore, S elseStore, boolean storeChanged) {
-        super(value);
-        this.thenStore = thenStore;
-        this.elseStore = elseStore;
-        this.storeChanged = storeChanged;
+        this(value, thenStore, elseStore, null, storeChanged);
     }
 
     public ConditionalTransferResult(A value, S thenStore, S elseStore) {
@@ -72,8 +68,7 @@ public class ConditionalTransferResult<A extends AbstractValue<A>, S extends Sto
             S elseStore,
             Map<TypeMirror, S> exceptionalStores,
             boolean storeChanged) {
-        super(value);
-        this.exceptionalStores = exceptionalStores;
+        super(value, exceptionalStores);
         this.thenStore = thenStore;
         this.elseStore = elseStore;
         this.storeChanged = storeChanged;

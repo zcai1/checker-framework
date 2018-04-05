@@ -1,7 +1,13 @@
 package org.checkerframework.checker.guieffect;
 
+import com.sun.source.tree.ExpressionTree;
+import com.sun.source.tree.LambdaExpressionTree;
+import com.sun.source.tree.MemberSelectTree;
+import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
+import java.util.HashSet;
+import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -26,14 +32,28 @@ import org.checkerframework.framework.source.Result;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
-import org.checkerframework.javacutil.AnnotationUtils;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.ElementUtils;
+import org.checkerframework.javacutil.ErrorReporter;
+import org.checkerframework.javacutil.TreeUtils;
 import org.checkerframework.javacutil.TypesUtils;
 
 /** Annotated type factory for the GUI Effect Checker. */
 public class GuiEffectTypeFactory extends BaseAnnotatedTypeFactory {
 
     protected final boolean debugSpew;
+
+    /**
+     * Keeps track of all lambda expressions with inferred UIEffect.
+     *
+     * <p>{@link #constrainLambdaToUI(LambdaExpressionTree) constrainLambdaToUI} adds lambda
+     * expressions to this set, and is called from GuiEffectVisitor whenever a lambda expression
+     * calls a @UIEffect method. Afterwards {@link
+     * #getInferedEffectForLambdaExpression(LambdaExpressionTree lambdaTree)
+     * getInferedEffectForLambdaExpression} uses this set and the type annotations of the functional
+     * interface of the lambda to figure out if it can affect the UI or not.
+     */
+    protected final Set<LambdaExpressionTree> uiLambdas = new HashSet<LambdaExpressionTree>();
 
     public GuiEffectTypeFactory(BaseTypeChecker checker, boolean spew) {
         // use true to enable flow inference, false to disable it
@@ -241,6 +261,84 @@ public class GuiEffectTypeFactory extends BaseAnnotatedTypeFactory {
         return new Effect(SafeEffect.class);
     }
 
+    /**
+     * Get the effect of a method call at its callsite, acknowledging polymorphic instantiation
+     * using type use annotations.
+     *
+     * @param node The method invocation as an AST node.
+     * @param callerReceiver The type of the receiver object if available. Used to resolve direct
+     *     calls like "super()"
+     * @param methodElt The element of the callee method.
+     * @return The computed effect (SafeEffect or UIEffect) for the method call.
+     */
+    public Effect getComputedEffectAtCallsite(
+            MethodInvocationTree node,
+            AnnotatedTypeMirror.AnnotatedDeclaredType callerReceiver,
+            ExecutableElement methodElt) {
+        Effect targetEffect = getDeclaredEffect(methodElt);
+        if (targetEffect.isPoly()) {
+            AnnotatedTypeMirror srcType = null;
+            if (node.getMethodSelect().getKind() == Tree.Kind.MEMBER_SELECT) {
+                ExpressionTree src = ((MemberSelectTree) node.getMethodSelect()).getExpression();
+                srcType = getAnnotatedType(src);
+            } else if (node.getMethodSelect().getKind() == Tree.Kind.IDENTIFIER) {
+                // Tree.Kind.IDENTIFIER, e.g. a direct call like "super()"
+                if (callerReceiver == null) {
+                    // Not enought information provided to instantiate this type-polymorphic effects
+                    return targetEffect;
+                }
+                srcType = callerReceiver;
+            } else {
+                ErrorReporter.errorAbort("Unexpected getMethodSelect() kind at callsite " + node);
+            }
+
+            // Instantiate type-polymorphic effects
+            if (srcType.hasAnnotation(AlwaysSafe.class)) {
+                targetEffect = new Effect(SafeEffect.class);
+            } else if (srcType.hasAnnotation(UI.class)) {
+                targetEffect = new Effect(UIEffect.class);
+            }
+            // Poly substitution would be a noop.
+        }
+        return targetEffect;
+    }
+
+    /**
+     * Get the inferred effect of a lambda expression based on the type annotations of its
+     * functional interface and the effects of the calls in its body.
+     *
+     * <p>This relies on GuiEffectVisitor to perform the actual inference step and mark lambdas
+     * with @PolyUIEffect functional interfaces as being explicitly UI-affecting using the {@link
+     * #constrainLambdaToUI(LambdaExpressionTree) constrainLambdaToUI} method.
+     *
+     * @param lambdaTree A lambda expression's AST node.
+     * @return The inferred effect of the lambda.
+     */
+    public Effect getInferedEffectForLambdaExpression(LambdaExpressionTree lambdaTree) {
+        // @UI type if annotated on the lambda expression explicitly
+        if (uiLambdas.contains(lambdaTree)) {
+            return new Effect(UIEffect.class);
+        }
+        ExecutableElement functionalInterfaceMethodElt =
+                (ExecutableElement)
+                        TreeUtils.findFunction(lambdaTree, checker.getProcessingEnvironment());
+        if (debugSpew) {
+            System.err.println("functionalInterfaceMethodElt found for lambda");
+        }
+        return getDeclaredEffect(functionalInterfaceMethodElt);
+    }
+
+    @Override
+    public AnnotatedTypeMirror getAnnotatedType(Tree tree) {
+        AnnotatedTypeMirror typeMirror = super.getAnnotatedType(tree);
+        if (tree.getKind() == Tree.Kind.LAMBDA_EXPRESSION
+                && uiLambdas.contains((LambdaExpressionTree) tree)
+                && !typeMirror.hasAnnotation(UI.class)) {
+            typeMirror.replaceAnnotation(AnnotationBuilder.fromClass(elements, UI.class));
+        }
+        return typeMirror;
+    }
+
     // Only the visitMethod call should pass true for warnings
     public Effect.EffectRange findInheritedEffectRange(
             TypeElement declaringType, ExecutableElement overridingMethod) {
@@ -257,7 +355,8 @@ public class GuiEffectTypeFactory extends BaseAnnotatedTypeFactory {
         ExecutableElement safe_override = null;
         ExecutableElement poly_override = null;
 
-        // We must account for explicit annotation, type declaration annotations, and package annotations
+        // We must account for explicit annotation, type declaration annotations, and package
+        // annotations
         boolean isUI =
                 (getDeclAnnotation(overridingMethod, UIEffect.class) != null
                                 || isUIType(declaringType))
@@ -307,14 +406,21 @@ public class GuiEffectTypeFactory extends BaseAnnotatedTypeFactory {
                     // using that utility method that returns a set of
                     // annodecl-method pairs given a method that overrides stuff
                     // if (isUI && issueConflictWarning) {
-                    //    AnnotatedTypeMirror.AnnotatedDeclaredType supdecl = fromElement((TypeElement)(((DeclaredType)superclass).asElement()));//((DeclaredType)superclass).asElement());
-                    //    // Need to special case an anonymous class with @UI on the decl, because "new @UI Runnable {...}" parses as @UI on an anon class decl extending Runnable
-                    //    boolean isAnonInstantiation = TypesUtils.isAnonymousType(ElementUtils.getType(declaringType)) && getDeclAnnotation(declaringType, UI.class) != null;
+                    //    AnnotatedTypeMirror.AnnotatedDeclaredType supdecl =
+                    // fromElement((TypeElement)(((DeclaredType)superclass).asElement()));//((DeclaredType)superclass).asElement());
+                    //    // Need to special case an anonymous class with @UI on the decl, because
+                    // "new @UI Runnable {...}" parses as @UI on an anon class decl extending
+                    // Runnable
+                    //    boolean isAnonInstantiation =
+                    // TypesUtils.isAnonymousType(ElementUtils.getType(declaringType)) &&
+                    // getDeclAnnotation(declaringType, UI.class) != null;
                     //    if (!isAnonInstantiation && !hasAnnotationByName(supdecl, UI.class)) {
-                    //        checker.report(Result.failure("override.effect.invalid", "non-UI instantiation of "+supdecl), errorNode);
-                    //        If uncommenting this, change the above line to match other calls of Result.failure("override.effect.invalid", ...)
+                    //        checker.report(Result.failure("override.effect.invalid",
+                    //            "non-UI instantiation of "+supdecl), errorNode);
+                    //        If uncommenting this, change the above line to match other calls of
+                    //            Result.failure("override.effect.invalid", ...)
                     //    }
-                    //}
+                    // }
                 }
             }
             DeclaredType decl = (DeclaredType) superclass;
@@ -432,6 +538,18 @@ public class GuiEffectTypeFactory extends BaseAnnotatedTypeFactory {
         return new ListTreeAnnotator(super.createTreeAnnotator(), new GuiEffectTreeAnnotator());
     }
 
+    /**
+     * Force the given lambda expression to have UIEffect.
+     *
+     * <p>Used by GuiEffectVisitor to mark as UIEffect all lambdas that perform UIEffect calls
+     * inside their bodies.
+     *
+     * @param lambdaExpressionTree A lambda expression's AST node.
+     */
+    public void constrainLambdaToUI(LambdaExpressionTree lambdaExpressionTree) {
+        uiLambdas.add(lambdaExpressionTree);
+    }
+
     /** A class for adding annotations based on tree. */
     private class GuiEffectTreeAnnotator extends TreeAnnotator {
 
@@ -461,22 +579,22 @@ public class GuiEffectTypeFactory extends BaseAnnotatedTypeFactory {
         public Void visitMethod(MethodTree node, AnnotatedTypeMirror type) {
             AnnotatedTypeMirror.AnnotatedExecutableType methType =
                     (AnnotatedTypeMirror.AnnotatedExecutableType) type;
-            Effect e = getDeclaredEffect(methType.getElement());
+            // Effect e = getDeclaredEffect(methType.getElement());
             TypeElement cls = (TypeElement) methType.getElement().getEnclosingElement();
 
             // STEP 1: Get the method effect annotation
-            if (!hasExplicitEffect(methType.getElement())) {
-                // TODO: This line does nothing!
-                // AnnotatedTypeMirror.addAnnotation silently ignores non-qualifier annotations!
-                // We should be digging up the /declaration/ of the method, and annotating that.
-                methType.addAnnotation(e.getAnnot());
-            }
+            // if (!hasExplicitEffect(methType.getElement())) {
+            // TODO: This line does nothing!
+            // AnnotatedTypeMirror.addAnnotation silently ignores non-qualifier annotations!
+            // We should be digging up the /declaration/ of the method, and annotating that.
+            // methType.addAnnotation(e.getAnnot());
+            // }
 
             // STEP 2: Fix up the method receiver annotation
             AnnotatedTypeMirror.AnnotatedDeclaredType receiverType = methType.getReceiverType();
             if (receiverType != null
                     && !receiverType.isAnnotatedInHierarchy(
-                            AnnotationUtils.fromClass(elements, UI.class))) {
+                            AnnotationBuilder.fromClass(elements, UI.class))) {
                 receiverType.addAnnotation(
                         isPolymorphicType(cls)
                                 ? PolyUI.class

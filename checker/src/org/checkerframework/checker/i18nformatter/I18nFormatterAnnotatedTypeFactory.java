@@ -29,6 +29,7 @@ import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
 import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 
 /**
@@ -41,7 +42,6 @@ import org.checkerframework.javacutil.AnnotationUtils;
  * invoked.
  *
  * @checker_framework.manual #i18n-formatter-checker Internationalization Format String Checker
- * @author Siwakorn Srisakaokul
  */
 public class I18nFormatterAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
@@ -58,11 +58,11 @@ public class I18nFormatterAnnotatedTypeFactory extends BaseAnnotatedTypeFactory 
     public I18nFormatterAnnotatedTypeFactory(BaseTypeChecker checker) {
         super(checker);
 
-        I18NUNKNOWNFORMAT = AnnotationUtils.fromClass(elements, I18nUnknownFormat.class);
-        I18NFORMAT = AnnotationUtils.fromClass(elements, I18nFormat.class);
-        I18NINVALIDFORMAT = AnnotationUtils.fromClass(elements, I18nInvalidFormat.class);
-        I18NFORMATBOTTOM = AnnotationUtils.fromClass(elements, I18nFormatBottom.class);
-        I18NFORMATFOR = AnnotationUtils.fromClass(elements, I18nFormatFor.class);
+        I18NUNKNOWNFORMAT = AnnotationBuilder.fromClass(elements, I18nUnknownFormat.class);
+        I18NFORMAT = AnnotationBuilder.fromClass(elements, I18nFormat.class);
+        I18NINVALIDFORMAT = AnnotationBuilder.fromClass(elements, I18nInvalidFormat.class);
+        I18NFORMATBOTTOM = AnnotationBuilder.fromClass(elements, I18nFormatBottom.class);
+        I18NFORMATFOR = AnnotationBuilder.fromClass(elements, I18nFormatFor.class);
 
         this.translations = Collections.unmodifiableMap(buildLookup());
 

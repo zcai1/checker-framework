@@ -13,17 +13,14 @@ import org.checkerframework.dataflow.util.HashCodeUtils;
  * A node for the instanceof operator:
  *
  * <p><em>x</em> instanceof <em>Point</em>
- *
- * @author Stefan Heule
- * @author Charlie Garrett
  */
 public class InstanceOfNode extends Node {
 
     /** The value being tested. */
-    protected Node operand;
+    protected final Node operand;
 
     /** The reference type being tested against. */
-    protected TypeMirror refType;
+    protected final TypeMirror refType;
 
     /** The tree associated with this node. */
     protected final InstanceOfTree tree;

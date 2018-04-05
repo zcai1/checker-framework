@@ -12,6 +12,7 @@ import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.VariableTree;
+import com.sun.source.util.TreePath;
 import java.util.List;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
@@ -20,7 +21,6 @@ import org.checkerframework.common.aliasing.qual.NonLeaked;
 import org.checkerframework.common.aliasing.qual.Unique;
 import org.checkerframework.common.basetype.BaseTypeChecker;
 import org.checkerframework.common.basetype.BaseTypeVisitor;
-import org.checkerframework.dataflow.cfg.node.MethodInvocationNode;
 import org.checkerframework.framework.source.Result;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedArrayType;
@@ -83,8 +83,7 @@ public class AliasingVisitor extends BaseTypeVisitor<AliasingAnnotatedTypeFactor
                 // this "else" block. Once constructors are implemented
                 // correctly we could remove that code below, since the type
                 // of "this" in a @Unique constructor will be @Unique.
-                MethodInvocationNode n = (MethodInvocationNode) atypeFactory.getNodeForTree(node);
-                Tree parent = n.getTreePath().getParentPath().getLeaf();
+                Tree parent = getCurrentPath().getParentPath().getLeaf();
                 boolean parentIsStatement = parent.getKind() == Kind.EXPRESSION_STATEMENT;
                 ExecutableElement methodElement = TreeUtils.elementFromUse(node);
                 List<? extends VariableElement> params = methodElement.getParameters();
@@ -92,7 +91,7 @@ public class AliasingVisitor extends BaseTypeVisitor<AliasingAnnotatedTypeFactor
                 assert (args.size() == params.size())
                         : "Number of arguments in"
                                 + " the method call "
-                                + n.toString()
+                                + node.toString()
                                 + " is different from the "
                                 + "number of parameters for the method declaration: "
                                 + methodElement.getSimpleName().toString();
@@ -177,12 +176,17 @@ public class AliasingVisitor extends BaseTypeVisitor<AliasingAnnotatedTypeFactor
 
         // If we are visiting a pseudo-assignment, visitorLeafKind is either
         // Kind.NEW_CLASS or Kind.METHOD_INVOCATION.
-        Kind visitorLeafKind = visitorState.getPath().getLeaf().getKind();
-        Kind parentKind = visitorState.getPath().getParentPath().getLeaf().getKind();
+        TreePath path = visitorState.getPath();
+        if (path == null) {
+            return;
+        }
+        Kind visitorLeafKind = path.getLeaf().getKind();
 
         if (visitorLeafKind == Kind.NEW_CLASS || visitorLeafKind == Kind.METHOD_INVOCATION) {
             // Handling pseudo-assignments
             if (canBeLeaked(valueTree)) {
+                Kind parentKind = visitorState.getPath().getParentPath().getLeaf().getKind();
+
                 if (!varType.hasAnnotation(NonLeaked.class)
                         && !(varType.hasAnnotation(LeakedToResult.class)
                                 && parentKind == Kind.EXPRESSION_STATEMENT)) {

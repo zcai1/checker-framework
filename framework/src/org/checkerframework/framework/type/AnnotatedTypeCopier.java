@@ -130,14 +130,6 @@ public class AnnotatedTypeCopier
             copy.setTypeArguments(copyTypeArgs);
         }
 
-        if (original.supertypes != null) {
-            final List<AnnotatedDeclaredType> copySupertypes = new ArrayList<>();
-            for (final AnnotatedDeclaredType supertype : original.supertypes) {
-                copySupertypes.add((AnnotatedDeclaredType) visit(supertype, originalToCopy));
-            }
-            copy.supertypes = Collections.unmodifiableList(copySupertypes);
-        }
-
         return copy;
     }
 
@@ -348,6 +340,8 @@ public class AnnotatedTypeCopier
         if (original.getSuperBoundField() != null) {
             copy.setSuperBound(visit(original.getSuperBoundField(), originalToCopy).asUse());
         }
+
+        copy.setTypeVariable(original.getTypeVariable());
 
         return copy;
     }

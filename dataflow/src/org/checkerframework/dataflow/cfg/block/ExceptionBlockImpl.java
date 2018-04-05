@@ -8,18 +8,14 @@ import java.util.Set;
 import javax.lang.model.type.TypeMirror;
 import org.checkerframework.dataflow.cfg.node.Node;
 
-/**
- * Base class of the {@link Block} implementation hierarchy.
- *
- * @author Stefan Heule
- */
+/** Base class of the {@link Block} implementation hierarchy. */
 public class ExceptionBlockImpl extends SingleSuccessorBlockImpl implements ExceptionBlock {
 
     /** Set of exceptional successors. */
-    protected Map<TypeMirror, Set<Block>> exceptionalSuccessors;
+    protected final Map<TypeMirror, Set<Block>> exceptionalSuccessors;
 
     public ExceptionBlockImpl() {
-        type = BlockType.EXCEPTION_BLOCK;
+        super(BlockType.EXCEPTION_BLOCK);
         exceptionalSuccessors = new HashMap<>();
     }
 
@@ -39,9 +35,6 @@ public class ExceptionBlockImpl extends SingleSuccessorBlockImpl implements Exce
 
     /** Add an exceptional successor. */
     public void addExceptionalSuccessor(BlockImpl b, TypeMirror cause) {
-        if (exceptionalSuccessors == null) {
-            exceptionalSuccessors = new HashMap<>();
-        }
         Set<Block> blocks = exceptionalSuccessors.get(cause);
         if (blocks == null) {
             blocks = new HashSet<Block>();

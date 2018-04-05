@@ -2,8 +2,8 @@ package org.checkerframework.dataflow.cfg.node;
 
 import com.sun.source.tree.CaseTree;
 import com.sun.source.tree.Tree.Kind;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedList;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.Types;
 import org.checkerframework.dataflow.util.HashCodeUtils;
@@ -15,15 +15,12 @@ import org.checkerframework.dataflow.util.HashCodeUtils;
  * <pre>
  *   case <em>constant</em>:
  * </pre>
- *
- * @author Stefan Heule
- * @author Charlie Garrett
  */
 public class CaseNode extends Node {
 
-    protected CaseTree tree;
-    protected Node switchExpr;
-    protected Node caseExpr;
+    protected final CaseTree tree;
+    protected final Node switchExpr;
+    protected final Node caseExpr;
 
     public CaseNode(CaseTree tree, Node switchExpr, Node caseExpr, Types types) {
         super(types.getNoType(TypeKind.NONE));
@@ -73,7 +70,7 @@ public class CaseNode extends Node {
 
     @Override
     public Collection<Node> getOperands() {
-        LinkedList<Node> list = new LinkedList<Node>();
+        ArrayList<Node> list = new ArrayList<Node>(2);
         list.add(getSwitchOperand());
         list.add(getCaseOperand());
         return list;

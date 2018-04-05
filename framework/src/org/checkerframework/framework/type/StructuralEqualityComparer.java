@@ -20,7 +20,6 @@ import org.checkerframework.framework.util.AtmCombo;
 import org.checkerframework.framework.util.PluginUtil;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.ErrorReporter;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.TypesUtils;
 
 /**
@@ -33,10 +32,10 @@ import org.checkerframework.javacutil.TypesUtils;
  */
 public class StructuralEqualityComparer extends AbstractAtmComboVisitor<Boolean, VisitHistory> {
 
-    //TODO: REMOVE THIS OVERRIDE WHEN inferTypeArgs NO LONGER GENERATES INCOMPARABLE TYPES
-    //TODO: THE PROBLEM IS THIS CLASS SHOULD FAIL WHEN INCOMPARABLE TYPES ARE COMPARED BUT
-    //TODO: TO CURRENTLY SUPPORT THE BUGGY inferTypeArgs WE FALL BACK TO the RawnessComparer
-    //TODO: WHICH IS CLOSE TO THE OLD TypeHierarchy behavior
+    // TODO: REMOVE THIS OVERRIDE WHEN inferTypeArgs NO LONGER GENERATES INCOMPARABLE TYPES
+    // TODO: THE PROBLEM IS THIS CLASS SHOULD FAIL WHEN INCOMPARABLE TYPES ARE COMPARED BUT
+    // TODO: TO CURRENTLY SUPPORT THE BUGGY inferTypeArgs WE FALL BACK TO the RawnessComparer
+    // TODO: WHICH IS CLOSE TO THE OLD TypeHierarchy behavior
     private final DefaultRawnessComparer fallback;
 
     // explain this one
@@ -65,8 +64,8 @@ public class StructuralEqualityComparer extends AbstractAtmComboVisitor<Boolean,
             }
         }
 
-        //TODO: REMOVE THIS OVERRIDE WHEN inferTypeArgs NO LONGER GENERATES INCOMPARABLE TYPES
-        //TODO: THe rawness comparer is close to the old implementation of TypeHierarchy
+        // TODO: REMOVE THIS OVERRIDE WHEN inferTypeArgs NO LONGER GENERATES INCOMPARABLE TYPES
+        // TODO: THe rawness comparer is close to the old implementation of TypeHierarchy
         if (fallback != null) {
             return fallback.isValidInHierarchy(type1, type2, currentTop, visitHistory);
         }
@@ -263,13 +262,14 @@ public class StructuralEqualityComparer extends AbstractAtmComboVisitor<Boolean,
             final AnnotatedDeclaredType type2,
             final VisitHistory visited) {
 
-        //TODO: ANYTHING WITH RAW TYPES? SHOULD WE HANDLE THEM LIKE DefaultTypeHierarchy, i.e. use ignoreRawTypes
+        // TODO: ANYTHING WITH RAW TYPES? SHOULD WE HANDLE THEM LIKE DefaultTypeHierarchy, i.e. use
+        // ignoreRawTypes
         final List<? extends AnnotatedTypeMirror> type1Args = type1.getTypeArguments();
         final List<? extends AnnotatedTypeMirror> type2Args = type2.getTypeArguments();
 
-        //TODO: IN THE ORIGINAL TYPE_HIERARCHY WE ALWAYS RETURN TRUE IF ONE OF THE LISTS IS EMPTY
-        //TODO: WE SHOULD NEVER GET HERE UNLESS type's declared class and type2's declared class are equal
-        //TODO: but potentially this would return true if say we compared (Object, List<String>)
+        // TODO: IN THE ORIGINAL TYPE_HIERARCHY WE ALWAYS RETURN TRUE IF ONE OF THE LISTS IS EMPTY.
+        // WE SHOULD NEVER GET HERE UNLESS type's declared class and type2's declared class are
+        // equal but potentially this would return true if say we compared (Object, List<String>).
         if (type1Args.isEmpty() || type2Args.isEmpty()) {
             return true;
         }
@@ -355,9 +355,9 @@ public class StructuralEqualityComparer extends AbstractAtmComboVisitor<Boolean,
         }
         visited.add(type1, type2);
 
-        //TODO: Remove this code when capture conversion is implemented
-        if (InternalUtils.isCaptured(type1.getUnderlyingType())
-                || InternalUtils.isCaptured(type2.getUnderlyingType())) {
+        // TODO: Remove this code when capture conversion is implemented
+        if (TypesUtils.isCaptured(type1.getUnderlyingType())
+                || TypesUtils.isCaptured(type2.getUnderlyingType())) {
             if (!boundsMatch(type1, type2)) {
                 return subtypeAndCompare(type1.getUpperBound(), type2.getUpperBound(), visited)
                         && subtypeAndCompare(type1.getLowerBound(), type2.getLowerBound(), visited);
@@ -488,8 +488,9 @@ public class StructuralEqualityComparer extends AbstractAtmComboVisitor<Boolean,
         return arePrimeAnnosEqual(type1, type2);
     }
 
-    // The following methods are because we use WILDCARDS instead of TYPEVARS for capture converted wildcards
-    //TODO: REMOVE THE METHOD BELOW WHEN CAPTURE CONVERSION IS IMPLEMENTED
+    // The following methods are because we use WILDCARDS instead of TYPEVARS for capture converted
+    // wildcards.
+    // TODO: REMOVE THE METHOD BELOW WHEN CAPTURE CONVERSION IS IMPLEMENTED
     /**
      * Since the Checker Framework doesn't engage in capture conversion, and since sometimes type
      * variables are "inferred" to be wildcards, this method allows the comparison of a wildcard to

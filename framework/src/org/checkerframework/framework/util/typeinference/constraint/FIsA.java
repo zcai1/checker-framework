@@ -15,13 +15,13 @@ public class FIsA extends AFConstraint {
 
     @Override
     public TUConstraint toTUConstraint() {
-        return new TIsU((AnnotatedTypeVariable) formalParameter, argument);
+        return new TIsU((AnnotatedTypeVariable) formalParameter, argument, true);
     }
 
     @Override
     protected FIsA construct(
             AnnotatedTypeMirror newArgument, AnnotatedTypeMirror newFormalParameter) {
-        return new FIsA(newArgument, newFormalParameter);
+        return new FIsA(newFormalParameter, newArgument);
     }
 
     @Override

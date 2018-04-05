@@ -1,9 +1,5 @@
 package org.checkerframework.checker.index.upperbound;
 
-/*>>>
-import org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey;
-*/
-
 import com.sun.source.tree.ArrayAccessTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.NewArrayTree;
@@ -11,6 +7,7 @@ import com.sun.source.tree.Tree.Kind;
 import java.util.List;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.type.TypeKind;
+import org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey;
 import org.checkerframework.checker.index.IndexUtil;
 import org.checkerframework.checker.index.qual.SameLen;
 import org.checkerframework.checker.index.samelen.SameLenAnnotatedTypeFactory;
@@ -95,8 +92,8 @@ public class UpperBoundVisitor extends BaseTypeVisitor<UpperBoundAnnotatedTypeFa
         }
 
         // Check against the minlen of the array itself.
-        Integer minLen = IndexUtil.getMinLen(arrTree, atypeFactory.getValueAnnotatedTypeFactory());
-        if (valMax != null && minLen != null && valMax < minLen) {
+        int minLen = IndexUtil.getMinLen(arrTree, atypeFactory.getValueAnnotatedTypeFactory());
+        if (valMax != null && valMax < minLen) {
             return;
         }
 
@@ -147,10 +144,24 @@ public class UpperBoundVisitor extends BaseTypeVisitor<UpperBoundAnnotatedTypeFa
     @Override
     protected void commonAssignmentCheck(
             AnnotatedTypeMirror varType,
-            ExpressionTree valueExp,
-            /*@CompilerMessageKey*/ String errorKey) {
-        if (!relaxedCommonAssignment(varType, valueExp)) {
-            super.commonAssignmentCheck(varType, valueExp, errorKey);
+            ExpressionTree valueTree,
+            @CompilerMessageKey String errorKey) {
+        if (!relaxedCommonAssignment(varType, valueTree)) {
+            super.commonAssignmentCheck(varType, valueTree, errorKey);
+        } else if (checker.hasOption("showchecks")) {
+            // Print the success message because super isn't called.
+            long valuePos = positions.getStartPosition(root, valueTree);
+            AnnotatedTypeMirror valueType = atypeFactory.getAnnotatedType(valueTree);
+            System.out.printf(
+                    " %s (line %3d): %s %s%n     actual: %s %s%n   expected: %s %s%n",
+                    "success: actual is subtype of expected",
+                    (root.getLineMap() != null ? root.getLineMap().getLineNumber(valuePos) : -1),
+                    valueTree.getKind(),
+                    valueTree,
+                    valueType.getKind(),
+                    valueType.toString(),
+                    varType.getKind(),
+                    varType.toString());
         }
     }
 
@@ -214,6 +225,20 @@ public class UpperBoundVisitor extends BaseTypeVisitor<UpperBoundAnnotatedTypeFa
 
         AnnotatedTypeMirror expType = atypeFactory.getAnnotatedType(valueExp);
         UBQualifier expQual = UBQualifier.createUBQualifier(expType, atypeFactory.UNKNOWN);
+
+        UBQualifier lessThanQual = atypeFactory.fromLessThan(valueExp, getCurrentPath());
+        if (lessThanQual != null) {
+            expQual = expQual.glb(lessThanQual);
+        }
+
+        UBQualifier lessThanOrEqualQual =
+                atypeFactory.fromLessThanOrEqual(valueExp, getCurrentPath());
+        if (lessThanOrEqualQual != null) {
+            expQual = expQual.glb(lessThanOrEqualQual);
+        }
+        if (expQual.isSubtype(varLtlQual)) {
+            return true;
+        }
 
         Long value = IndexUtil.getMaxValue(valueExp, atypeFactory.getValueAnnotatedTypeFactory());
 
@@ -287,6 +312,6 @@ public class UpperBoundVisitor extends BaseTypeVisitor<UpperBoundAnnotatedTypeFa
         if (value == null) {
             return false;
         }
-        return varQual.isValuePlusOffsetLessThanMinLen(arrayName, value.intValue(), minLen);
+        return varQual.isValuePlusOffsetLessThanMinLen(arrayName, value, minLen);
     }
 }

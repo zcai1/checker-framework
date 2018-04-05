@@ -14,9 +14,9 @@ import org.checkerframework.framework.type.treeannotator.ImplicitsTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.PropagationTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
-import org.checkerframework.framework.util.AnnotationBuilder;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import testlib.wholeprograminference.qual.DefaultType;
 import testlib.wholeprograminference.qual.ImplicitAnno;
@@ -31,8 +31,6 @@ import testlib.wholeprograminference.qual.WholeProgramInferenceBottom;
  * AnnotatedTypeFactory to test whole-program inference using .jaif files.
  *
  * <p>The used qualifier hierarchy is straightforward and only intended for test purposes.
- *
- * @author pbsf
  */
 public class WholeProgramInferenceTestAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
@@ -78,8 +76,6 @@ public class WholeProgramInferenceTestAnnotatedTypeFactory extends BaseAnnotated
     /**
      * Using a MultiGraphQualifierHierarchy to enable tests with Annotations that contain
      * fields. @see SiblingWithFields.
-     *
-     * @author pbsf
      */
     protected class WholeProgramInferenceTestQualifierHierarchy
             extends MultiGraphQualifierHierarchy {

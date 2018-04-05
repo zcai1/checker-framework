@@ -12,6 +12,7 @@ import java.util.Set;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.type.TypeVariable;
+import javax.lang.model.type.WildcardType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.javacutil.TypeAnnotationUtils;
 import org.checkerframework.javacutil.trees.TreeBuilder;
@@ -49,7 +50,7 @@ public class CFTreeBuilder extends TreeBuilder {
             // TODO: what TypeAnnotationPosition should be used?
             Attribute.TypeCompound typeCompound =
                     TypeAnnotationUtils.createTypeCompoundFromAnnotationMirror(
-                            env, am, TypeAnnotationUtils.unknownTAPosition());
+                            am, TypeAnnotationUtils.unknownTAPosition(), env);
             JCTree.JCAnnotation annotationTree = maker.Annotation(typeCompound);
             JCTree.JCAnnotation typeAnnotationTree =
                     maker.TypeAnnotation(
@@ -106,14 +107,15 @@ public class CFTreeBuilder extends TreeBuilder {
                 {
                     AnnotatedTypeMirror.AnnotatedWildcardType wildcard =
                             (AnnotatedTypeMirror.AnnotatedWildcardType) annotatedType;
-                    if (wildcard.getExtendsBound() != null) {
+                    WildcardType wildcardType = wildcard.getUnderlyingType();
+                    if (wildcardType.getExtendsBound() != null) {
                         Tree annotatedExtendsBound =
                                 createAnnotatedType(wildcard.getExtendsBound());
                         underlyingTypeTree =
                                 maker.Wildcard(
                                         maker.TypeBoundKind(BoundKind.EXTENDS),
                                         (JCTree) annotatedExtendsBound);
-                    } else if (wildcard.getSuperBound() != null) {
+                    } else if (wildcardType.getSuperBound() != null) {
                         Tree annotatedSuperBound = createAnnotatedType(wildcard.getSuperBound());
                         underlyingTypeTree =
                                 maker.Wildcard(
@@ -121,9 +123,7 @@ public class CFTreeBuilder extends TreeBuilder {
                                         (JCTree) annotatedSuperBound);
                     } else {
                         underlyingTypeTree =
-                                maker.Wildcard(
-                                        maker.TypeBoundKind(BoundKind.UNBOUND),
-                                        maker.TypeIdent(TypeTag.VOID));
+                                maker.Wildcard(maker.TypeBoundKind(BoundKind.UNBOUND), null);
                     }
                     break;
                 }

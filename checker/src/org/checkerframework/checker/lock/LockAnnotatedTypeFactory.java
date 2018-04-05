@@ -1,9 +1,5 @@
 package org.checkerframework.checker.lock;
 
-/*>>>
-import org.checkerframework.checker.interning.qual.*;
-*/
-
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.Tree;
@@ -13,10 +9,13 @@ import com.sun.source.util.TreePath;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -51,17 +50,17 @@ import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
 import org.checkerframework.framework.util.AnnotatedTypes;
-import org.checkerframework.framework.util.AnnotationBuilder;
 import org.checkerframework.framework.util.FlowExpressionParseUtil;
 import org.checkerframework.framework.util.FlowExpressionParseUtil.FlowExpressionContext;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
 import org.checkerframework.framework.util.dependenttypes.DependentTypesError;
 import org.checkerframework.framework.util.dependenttypes.DependentTypesHelper;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.ElementUtils;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.Pair;
+import org.checkerframework.javacutil.TreeUtils;
 
 /**
  * LockAnnotatedTypeFactory builds types with @LockHeld and @LockPossiblyHeld annotations. LockHeld
@@ -90,16 +89,21 @@ public class LockAnnotatedTypeFactory
             GUARDEDBYBOTTOM,
             GUARDSATISFIED;
 
+    protected final Class<? extends Annotation> jcip_GuardedBy;
+
+    protected final Class<? extends Annotation> javax_GuardedBy;
+
+    @SuppressWarnings("unchecked") // cast to generic type
     public LockAnnotatedTypeFactory(BaseTypeChecker checker) {
         super(checker, true);
 
-        LOCKHELD = AnnotationUtils.fromClass(elements, LockHeld.class);
-        LOCKPOSSIBLYHELD = AnnotationUtils.fromClass(elements, LockPossiblyHeld.class);
-        SIDEEFFECTFREE = AnnotationUtils.fromClass(elements, SideEffectFree.class);
-        GUARDEDBYUNKNOWN = AnnotationUtils.fromClass(elements, GuardedByUnknown.class);
-        GUARDEDBY = AnnotationUtils.fromClass(elements, GuardedBy.class);
-        GUARDEDBYBOTTOM = AnnotationUtils.fromClass(elements, GuardedByBottom.class);
-        GUARDSATISFIED = AnnotationUtils.fromClass(elements, GuardSatisfied.class);
+        LOCKHELD = AnnotationBuilder.fromClass(elements, LockHeld.class);
+        LOCKPOSSIBLYHELD = AnnotationBuilder.fromClass(elements, LockPossiblyHeld.class);
+        SIDEEFFECTFREE = AnnotationBuilder.fromClass(elements, SideEffectFree.class);
+        GUARDEDBYUNKNOWN = AnnotationBuilder.fromClass(elements, GuardedByUnknown.class);
+        GUARDEDBY = AnnotationBuilder.fromClass(elements, GuardedBy.class);
+        GUARDEDBYBOTTOM = AnnotationBuilder.fromClass(elements, GuardedByBottom.class);
+        GUARDSATISFIED = AnnotationBuilder.fromClass(elements, GuardSatisfied.class);
 
         // This alias is only true for the Lock Checker. All other checkers must
         // ignore the @LockingFree annotation.
@@ -110,6 +114,27 @@ public class LockAnnotatedTypeFactory
         // not truly side-effect-free even as far as the Lock Checker is concerned,
         // so there is additional handling of this annotation in the Lock Checker.
         addAliasedDeclAnnotation(ReleasesNoLocks.class, SideEffectFree.class, SIDEEFFECTFREE);
+
+        Class<? extends Annotation> testLoad;
+        try {
+            testLoad =
+                    (Class<? extends Annotation>) Class.forName("net.jcip.annotations.GuardedBy");
+
+        } catch (Exception e) {
+            // Ignore exceptions from Class.forName
+            testLoad = null;
+        }
+        jcip_GuardedBy = testLoad;
+
+        try {
+            testLoad =
+                    (Class<? extends Annotation>)
+                            Class.forName("javax.annotation.concurrent.GuardedBy");
+        } catch (Exception e) {
+            // Ignore exceptions from Class.forName
+            testLoad = null;
+        }
+        javax_GuardedBy = testLoad;
 
         postInit();
     }
@@ -263,7 +288,8 @@ public class LockAnnotatedTypeFactory
             boolean rhsIsGuardedBy = isGuardedBy(subAnno);
 
             if (lhsIsGuardedBy && rhsIsGuardedBy) {
-                // Two @GuardedBy annotations are considered subtypes of each other if and only if their values match exactly.
+                // Two @GuardedBy annotations are considered subtypes of each other if and only if
+                // their values match exactly.
 
                 List<String> lhsValues =
                         AnnotationUtils.getElementValueArray(
@@ -278,24 +304,31 @@ public class LockAnnotatedTypeFactory
             boolean rhsIsGuardSatisfied = isGuardSatisfied(subAnno);
 
             if (lhsIsGuardSatisfied && rhsIsGuardSatisfied) {
-                // There are cases in which two expressions with identical @GuardSatisfied(...) annotations are not
+                // There are cases in which two expressions with identical @GuardSatisfied(...)
+                // annotations are not
                 // assignable. Those are handled elsewhere.
 
-                // Two expressions with @GuardSatisfied annotations (without an index) are sometimes not assignable.
-                // For example, two method actual parameters with @GuardSatisfied annotations are assumed to refer to different guards.
+                // Two expressions with @GuardSatisfied annotations (without an index) are sometimes
+                // not assignable.
+                // For example, two method actual parameters with @GuardSatisfied annotations are
+                // assumed to refer to different guards.
 
-                // This is largely handled in methodFromUse and in LockVisitor.visitMethodInvocation.
-                // Related behavior is handled in LockVisitor.visitMethod (issuing an error if a non-constructor method
-                // definition has a return type of @GuardSatisfied without an index).
+                // This is largely handled in methodFromUse and in
+                // LockVisitor.visitMethodInvocation.
+                // Related behavior is handled in LockVisitor.visitMethod (issuing an error if a
+                // non-constructor method definition has a return type of @GuardSatisfied without an
+                // index).
 
-                // Two expressions with @GuardSatisfied() annotations are assignable when comparing a formal receiver
-                // to an actual receiver (see LockVisitor.skipReceiverSubtypeCheck) or a formal parameter to an
-                // actual parameter (see LockVisitor.commonAssignmentCheck for the details on this rule).
+                // Two expressions with @GuardSatisfied() annotations are assignable when comparing
+                // a formal receiver to an actual receiver (see
+                // LockVisitor.skipReceiverSubtypeCheck) or a formal parameter to an actual
+                // parameter (see LockVisitor.commonAssignmentCheck for the details on this rule).
 
                 return AnnotationUtils.areSame(superAnno, subAnno);
             }
 
-            // Remove values from @GuardedBy annotations for further subtype checking. Remove indices from @GuardSatisfied annotations.
+            // Remove values from @GuardedBy annotations for further subtype checking. Remove
+            // indices from @GuardSatisfied annotations.
 
             if (lhsIsGuardedBy) {
                 superAnno = GUARDEDBY;
@@ -545,10 +578,11 @@ public class LockAnnotatedTypeFactory
             return mfuPair;
         }
 
-        // If a method's formal return type is annotated with @GuardSatisfied(index),
-        // look for the first instance of @GuardSatisfied(index) in the method definition's receiver type or
-        // formal parameters, retrieve the corresponding type of the actual parameter / receiver at the call site
-        // (e.g. @GuardedBy("someLock") and replace the return type at the call site with this type.
+        // If a method's formal return type is annotated with @GuardSatisfied(index), look for the
+        // first instance of @GuardSatisfied(index) in the method definition's receiver type or
+        // formal parameters, retrieve the corresponding type of the actual parameter / receiver at
+        // the call site (e.g. @GuardedBy("someLock") and replace the return type at the call site
+        // with this type.
 
         AnnotatedExecutableType invokedMethod = mfuPair.first;
 
@@ -565,8 +599,9 @@ public class LockAnnotatedTypeFactory
 
         int returnGuardSatisfiedIndex = getGuardSatisfiedIndex(methodDefinitionReturn);
 
-        // @GuardSatisfied with no index defaults to index -1. Ignore instances of @GuardSatisfied with no index.
-        // If a method is defined with a return type of @GuardSatisfied with no index, an error is reported by LockVisitor.visitMethod.
+        // @GuardSatisfied with no index defaults to index -1. Ignore instances of @GuardSatisfied
+        // with no index.  If a method is defined with a return type of @GuardSatisfied with no
+        // index, an error is reported by LockVisitor.visitMethod.
 
         if (returnGuardSatisfiedIndex == -1) {
             return mfuPair;
@@ -652,7 +687,7 @@ public class LockAnnotatedTypeFactory
     @Override
     public void addComputedTypeAnnotations(Tree tree, AnnotatedTypeMirror type, boolean useFlow) {
         if (tree.getKind() == Tree.Kind.VARIABLE) {
-            translateJcipAndJavaxAnnotations(InternalUtils.symbol((VariableTree) tree), type);
+            translateJcipAndJavaxAnnotations(TreeUtils.elementFromTree((VariableTree) tree), type);
         }
 
         super.addComputedTypeAnnotations(tree, type, useFlow);
@@ -674,18 +709,41 @@ public class LockAnnotatedTypeFactory
             return;
         }
 
-        AnnotationMirror anno = getDeclAnnotation(element, net.jcip.annotations.GuardedBy.class);
+        AnnotationMirror anno = null;
 
-        if (anno == null) {
-            anno = getDeclAnnotation(element, javax.annotation.concurrent.GuardedBy.class);
+        if (jcip_GuardedBy != null) {
+            anno = getDeclAnnotation(element, jcip_GuardedBy);
+        }
+
+        if (anno == null && javax_GuardedBy != null) {
+            anno = getDeclAnnotation(element, javax_GuardedBy);
         }
 
         if (anno == null) {
             return;
         }
 
-        List<String> lockExpressions =
-                AnnotationUtils.getElementValueArray(anno, "value", String.class, true);
+        // The version of javax.annotation.concurrent.GuardedBy included with the Checker Framework
+        // declares the type of value as an array of Strings where as the one included with FindBugs
+        // declares it as a String. So, the code below figures out which type should be used.
+        Map<? extends ExecutableElement, ? extends AnnotationValue> valmap =
+                anno.getElementValues();
+        Object value = null;
+        for (ExecutableElement elem : valmap.keySet()) {
+            if (elem.getSimpleName().contentEquals("value")) {
+                value = valmap.get(elem).getValue();
+                break;
+            }
+        }
+        List<String> lockExpressions;
+        if (value instanceof List) {
+            lockExpressions =
+                    AnnotationUtils.getElementValueArray(anno, "value", String.class, true);
+        } else if (value instanceof String) {
+            lockExpressions = Collections.singletonList((String) value);
+        } else {
+            return;
+        }
 
         if (lockExpressions.isEmpty()) {
             atm.addAnnotation(GUARDEDBY);

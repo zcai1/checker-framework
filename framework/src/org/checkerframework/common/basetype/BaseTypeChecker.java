@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -122,6 +121,9 @@ public abstract class BaseTypeChecker extends SourceChecker implements BaseTypeC
      * initialized via calls to instantiateSubcheckers.
      */
     private List<BaseTypeChecker> immediateSubcheckers;
+
+    /** Supported options for this checker */
+    private Set<String> supportedOptions;
 
     /**
      * Returns the set of subchecker classes on which this checker depends. Returns an empty set if
@@ -380,7 +382,8 @@ public abstract class BaseTypeChecker extends SourceChecker implements BaseTypeC
         for (Class<? extends BaseTypeChecker> subcheckerClass : classesOfImmediateSubcheckers) {
             BaseTypeChecker subchecker = alreadyInitializedSubcheckerMap.get(subcheckerClass);
             if (subchecker != null) {
-                // Add the already initialized subchecker to the list of immediate subcheckers so that this checker can refer to it.
+                // Add the already initialized subchecker to the list of immediate subcheckers so
+                // that this checker can refer to it.
                 immediateSubcheckers.add(subchecker);
                 continue;
             }
@@ -624,17 +627,21 @@ public abstract class BaseTypeChecker extends SourceChecker implements BaseTypeC
 
     @Override
     public Set<String> getSupportedOptions() {
-        Set<String> options = new HashSet<String>();
-        options.addAll(super.getSupportedOptions());
+        if (supportedOptions == null) {
+            Set<String> options = new HashSet<String>();
+            options.addAll(super.getSupportedOptions());
 
-        for (BaseTypeChecker checker : getSubcheckers()) {
-            options.addAll(checker.getSupportedOptions());
+            for (BaseTypeChecker checker : getSubcheckers()) {
+                options.addAll(checker.getSupportedOptions());
+            }
+
+            options.addAll(
+                    expandCFOptions(
+                            Arrays.asList(this.getClass()), options.toArray(new String[0])));
+
+            supportedOptions = Collections.unmodifiableSet(options);
         }
-
-        options.addAll(
-                expandCFOptions(Arrays.asList(this.getClass()), options.toArray(new String[0])));
-
-        return Collections.<String>unmodifiableSet(options);
+        return supportedOptions;
     }
 
     @Override
@@ -651,8 +658,9 @@ public abstract class BaseTypeChecker extends SourceChecker implements BaseTypeC
     @Override
     protected Object processArg(Object arg) {
         if (arg instanceof Collection) {
-            List<Object> newList = new LinkedList<>();
-            for (Object o : ((Collection<?>) arg)) {
+            Collection<?> carg = (Collection<?>) arg;
+            List<Object> newList = new ArrayList<>(carg.size());
+            for (Object o : carg) {
                 newList.add(processArg(o));
             }
             return newList;

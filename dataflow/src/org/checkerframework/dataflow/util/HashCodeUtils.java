@@ -1,17 +1,13 @@
 package org.checkerframework.dataflow.util;
 
-/**
- * Utility class to implement the {@code hashCode} method.
- *
- * @author Stefan Heule
- */
+/** Utility class to implement the {@code hashCode} method. */
 public class HashCodeUtils {
 
     /** Odd prime number. */
-    private static int prime = 31;
+    private static final int prime = 31;
 
     /** Seed. */
-    private static int seed = 17;
+    private static final int seed = 17;
 
     /** Add a boolean value to a given hash. */
     public static int hash(int hash, boolean item) {

@@ -33,6 +33,7 @@ import org.checkerframework.dataflow.qual.SideEffectFree;
 import org.checkerframework.dataflow.util.PurityUtils;
 import org.checkerframework.framework.qual.MonotonicQualifier;
 import org.checkerframework.framework.type.AnnotatedTypeFactory;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.Pair;
 
@@ -48,9 +49,6 @@ import org.checkerframework.javacutil.Pair;
  * methods in the subclasses as well. Also check if
  * BaseTypeVisitor#getFlowExpressionContextFromNode(Node) needs to be updated. Failing to do so may
  * result in silent failures that are time consuming to debug.
- *
- * @author Charlie Garrett
- * @author Stefan Heule
  */
 // TODO: this class should be split into parts that are reusable generally, and
 // parts specific to the checker framework
@@ -204,7 +202,7 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
                             AnnotationUtils.getElementValueClassName(
                                     monotonicAnnotation, "value", false);
                     AnnotationMirror target =
-                            AnnotationUtils.fromName(atypeFactory.getElementUtils(), annotation);
+                            AnnotationBuilder.fromName(atypeFactory.getElementUtils(), annotation);
                     // Make sure the 'target' annotation is present.
                     if (AnnotationUtils.containsSame(otherVal.getAnnotations(), target)) {
                         newOtherVal =
@@ -359,9 +357,9 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
      */
     protected boolean isMonotonicUpdate(FieldAccess fieldAcc, V value) {
         boolean isMonotonic = false;
-        // TODO: this check for !sequentialSemantics is an optimization that breaks the contract of the method,
-        // since the method name and documentation say nothing about sequential semantics.
-        // This check should be performed by callers of this method when needed.
+        // TODO: This check for !sequentialSemantics is an optimization that breaks the contract of
+        // the method, since the method name and documentation say nothing about sequential
+        // semantics.  This check should be performed by callers of this method when needed.
         // TODO: Update the javadoc of this method when the above to-do item is addressed.
         if (!sequentialSemantics) { // only compute if necessary
             AnnotatedTypeFactory atypeFactory = this.analysis.atypeFactory;
@@ -374,7 +372,7 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
                         AnnotationUtils.getElementValueClassName(
                                 monotonicAnnotation, "value", false);
                 AnnotationMirror target =
-                        AnnotationUtils.fromName(atypeFactory.getElementUtils(), annotation);
+                        AnnotationBuilder.fromName(atypeFactory.getElementUtils(), annotation);
                 // Make sure the 'target' annotation is present.
                 if (AnnotationUtils.containsSame(value.getAnnotations(), target)) {
                     isMonotonic = true;
@@ -935,6 +933,12 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
         } else {
             return false;
         }
+    }
+
+    @Override
+    public int hashCode() {
+        // What is a good hash code to use?
+        return System.identityHashCode(this);
     }
 
     @SideEffectFree

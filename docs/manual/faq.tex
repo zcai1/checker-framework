@@ -255,7 +255,7 @@ If null pointer exceptions are most important to you, then by all means use
 the Nullness Checker.  But if you just want to try \emph{some}
 type-checker, there are others that are easier to use.
 
-we do not recommend indiscriminately running all the checkers on your code.
+We do not recommend indiscriminately running all the checkers on your code.
 The reason is that each one has a cost --- not just at compile time, but
 also in terms of code clutter and human time to maintain the annotations.
 If the property is important to you, is difficult for people to reason
@@ -263,8 +263,7 @@ about, or has caused problems in the past, then you should run that
 checker.  For other properties, the benefits may not repay the effort to
 use it.  You will be the best judge of this for your own code, of course.
 
-The \ahrefloc{linear-checker}{Linear Checker} (see
-\chapterpageref{linear-checker}) has not been extensively tested.
+%You might want to avoid some type-checkers when you are first starting out.
 Some of the third-party checkers (see
 \chapterpageref{third-party-checkers})
 have known bugs that limit their
@@ -736,7 +735,7 @@ warnings, if you annotate the type of \<field> and the return type of
 \<method> as \<@Format(INT)>.
 
 By default, the Checker Framework infers types for local variables
-(Section~\ref{type-refinement}), but not for for fields and method return
+(Section~\ref{type-refinement}), but not for fields and method return
 types.  (The Checker Framework includes a whole-program type inference tool
 that infers field and method return types; see
 Section~\ref{whole-program-inference}.)
@@ -864,9 +863,8 @@ For example, the following code is safe:
 \end{Verbatim}
 
 \noindent
-However, the Index Checker (which defines the
-\refqualclass{checker/index/qual}{Positive} type qualifier) cannot prove
-that either call to \<requiresPositive()> is safe, and it issues warnings
+However, the Index Checker (\chapterpageref{index-checker}), which defines the
+\refqualclass{checker/index/qual}{Positive} type qualifier, issues warnings
 saying that it cannot prove that the arguments are \<@Positive>.
 
 A slight variant of \<intExample1> can be verified:
@@ -1127,6 +1125,14 @@ expressiveness, the Lock Checker (see Chapter~\ref{lock-checker}) uses the
 \<@GuardedBy> with two distinct meanings.
 
 
+A final example of a type-and-declaration annotation is some \<@Nullable>
+or \<@NonNull> annotations that are intended to work both with modern tools
+that process type annotations and with old tools that were written before
+Java had type annotations.  Such type-and-declaration annotations were a
+temporary measure, intended to be used until the tool supported Java 8, and
+should not be necessary any longer.
+
+
 \subsection{How do I annotate a fully-qualified type name?\label{faq-annotate-fully-qualified-name}}
 
 If you write a fully-qualified type name in your program, then the Java
@@ -1337,7 +1343,7 @@ given variety of bug.
 
 A bug detector like \href{http://findbugs.sourceforge.net/}{FindBugs}~\cite{HovemeyerP2004,HovemeyerSP2005},
 \href{http://jlint.sourceforge.net/}{Jlint}~\cite{Artho2001}, or
-\href{http://pmd.sourceforge.net/}{PMD}~\cite{Copeland2005} aims to find \emph{some}
+\href{https://pmd.github.io/}{PMD}~\cite{Copeland2005} aims to find \emph{some}
 of the most obvious bugs in your program.  It uses a lightweight analysis,
 then uses heuristics to discard some of its warnings.  Thus, even if the tool
 prints no warnings, your code might still have errors --- maybe the
@@ -1398,9 +1404,7 @@ see~\chapterpageref{introduction}) and is extensible to more properties.
 
 There are also some benefits to Eclipse's null analysis.
 It is faster than the Checker Framework, in part because it is less featureful.
-It is built into Eclipse, so you do not have to download and install a
-separate Eclipse plugin as you do for the Checker Framework (see
-Section~\ref{eclipse-plugin}).
+It is built into Eclipse, so you do not have to add it to your build scripts.
 Its IDE integration is tighter and slicker.
 
 (If you know of other differences, please let us know at

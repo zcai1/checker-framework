@@ -10,6 +10,7 @@ import org.checkerframework.checker.index.IndexRefinementInfo;
 import org.checkerframework.checker.index.IndexUtil;
 import org.checkerframework.checker.index.qual.NonNegative;
 import org.checkerframework.checker.index.qual.Positive;
+import org.checkerframework.checker.index.qual.SubstringIndexFor;
 import org.checkerframework.checker.index.upperbound.UBQualifier.LessThanLengthOf;
 import org.checkerframework.checker.index.upperbound.UBQualifier.UpperBoundUnknownQualifier;
 import org.checkerframework.dataflow.analysis.ConditionalTransferResult;
@@ -22,6 +23,7 @@ import org.checkerframework.dataflow.analysis.TransferInput;
 import org.checkerframework.dataflow.analysis.TransferResult;
 import org.checkerframework.dataflow.cfg.node.ArrayCreationNode;
 import org.checkerframework.dataflow.cfg.node.AssignmentNode;
+import org.checkerframework.dataflow.cfg.node.CaseNode;
 import org.checkerframework.dataflow.cfg.node.FieldAccessNode;
 import org.checkerframework.dataflow.cfg.node.MethodInvocationNode;
 import org.checkerframework.dataflow.cfg.node.Node;
@@ -34,6 +36,7 @@ import org.checkerframework.framework.flow.CFAbstractStore;
 import org.checkerframework.framework.flow.CFAnalysis;
 import org.checkerframework.framework.flow.CFStore;
 import org.checkerframework.framework.flow.CFValue;
+import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.framework.type.QualifierHierarchy;
 
 public class UpperBoundTransfer extends IndexAbstractTransfer {
@@ -110,8 +113,7 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
         } else if (node instanceof NumericalSubtractionNode) {
             propagateToSubtractionOperands(typeOfNode, (NumericalSubtractionNode) node, in, store);
         } else if (node instanceof NumericalMultiplicationNode) {
-            if (atypeFactory.hasLowerBoundTypeByClass(node, NonNegative.class)
-                    || atypeFactory.hasLowerBoundTypeByClass(node, Positive.class)) {
+            if (atypeFactory.hasLowerBoundTypeByClass(node, Positive.class)) {
                 Node right = ((NumericalMultiplicationNode) node).getRightOperand();
                 Node left = ((NumericalMultiplicationNode) node).getLeftOperand();
                 propagateToMultiplicationOperand(typeOfNode, left, right, in, store);
@@ -224,6 +226,8 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
             propagateToOperands((LessThanLengthOf) largerQualPlus1, smaller, in, store);
         }
 
+        refineSubtrahendWithOffset(larger, smaller, true, in, store);
+
         Receiver rightRec = FlowExpressions.internalReprOf(analysis.getTypeFactory(), smaller);
         store.insertValue(rightRec, atypeFactory.convertUBQualifierToAnnotation(refinedRight));
     }
@@ -251,8 +255,49 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
             propagateToOperands((LessThanLengthOf) leftQualifier, right, in, store);
         }
 
+        refineSubtrahendWithOffset(left, right, false, in, store);
+
         Receiver rightRec = FlowExpressions.internalReprOf(analysis.getTypeFactory(), right);
         store.insertValue(rightRec, atypeFactory.convertUBQualifierToAnnotation(refinedRight));
+    }
+
+    /**
+     * Refines the subtrahend in a subtraction which is greater than or equal to a certain offset.
+     * The type of the subtrahend is refined to the type of the minuend with the offset added.
+     *
+     * <p>This is based on the fact that if {@code (minuend - subtrahend) >= offset}, and {@code
+     * minuend + o < l}, then {@code subtrahend + o + offset < l}.
+     *
+     * <p>If {@code gtNode} is not a {@link NumericalSubtractionNode}, the method does nothing.
+     *
+     * @param gtNode the node that is greater or equal to the offset
+     * @param offsetNode a node part of the offset
+     * @param offsetAddOne whether to add one to the offset
+     * @param in input of the transfer function
+     * @param store location to store the refined types
+     */
+    private void refineSubtrahendWithOffset(
+            Node gtNode,
+            Node offsetNode,
+            boolean offsetAddOne,
+            TransferInput<CFValue, CFStore> in,
+            CFStore store) {
+        if (gtNode instanceof NumericalSubtractionNode) {
+            NumericalSubtractionNode subtractionNode = (NumericalSubtractionNode) gtNode;
+
+            Node minuend = subtractionNode.getLeftOperand();
+            UBQualifier minuendQual = getUBQualifier(minuend, in);
+            Node subtrahend = subtractionNode.getRightOperand();
+            UBQualifier subtrahendQual = getUBQualifier(subtrahend, in);
+
+            UBQualifier newQual =
+                    subtrahendQual.glb(
+                            minuendQual
+                                    .plusOffset(offsetNode, atypeFactory)
+                                    .plusOffset(offsetAddOne ? 1 : 0));
+            Receiver subtrahendRec = FlowExpressions.internalReprOf(atypeFactory, subtrahend);
+            store.insertValue(subtrahendRec, atypeFactory.convertUBQualifierToAnnotation(newQual));
+        }
     }
 
     @Override
@@ -307,14 +352,34 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
     }
 
     /**
-     * If lengthAccess node is an sequence length field or method access and the other node is less
-     * than or equal to that sequence length, then refine the other nodes type to less than the
-     * sequence length.
+     * If lengthAccess node is an sequence length field or method access (optionally with a constant
+     * offset subtracted) and the other node is less than or equal to that sequence length (minus
+     * the offset), then refine the other nodes type to less than the sequence length (minus the
+     * offset).
      */
     private void refineNeqSequenceLength(
             Node lengthAccess, Node otherNode, AnnotationMirror otherNodeAnno, CFStore store) {
 
         Receiver receiver = null;
+        // If lengthAccess is "receiver.length - c" where c is an integer constant, stores c
+        // into lengthOffset
+        int lengthOffset = 0;
+        if (lengthAccess instanceof NumericalSubtractionNode) {
+            NumericalSubtractionNode subtraction = (NumericalSubtractionNode) lengthAccess;
+            Node offsetNode = subtraction.getRightOperand();
+            Long offsetValue =
+                    IndexUtil.getExactValue(
+                            offsetNode.getTree(), atypeFactory.getValueAnnotatedTypeFactory());
+            if (offsetValue != null
+                    && offsetValue > Integer.MIN_VALUE
+                    && offsetValue <= Integer.MAX_VALUE) {
+                lengthOffset = offsetValue.intValue();
+                lengthAccess = subtraction.getLeftOperand();
+            } else {
+                // Subtraction of non-constant expressions is not supported
+                return;
+            }
+        }
 
         if (NodeUtils.isArrayLengthFieldAccess(lengthAccess)) {
             FieldAccess fa =
@@ -322,7 +387,7 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
                             atypeFactory, (FieldAccessNode) lengthAccess);
             receiver = fa.getReceiver();
 
-        } else if (atypeFactory.getMethodIdentifier().isStringLengthInvocation(lengthAccess)) {
+        } else if (atypeFactory.getMethodIdentifier().isLengthOfMethodInvocation(lengthAccess)) {
             Receiver ma = FlowExpressions.internalReprOf(atypeFactory, lengthAccess);
             if (ma instanceof MethodCall) {
                 receiver = ((MethodCall) ma).getReceiver();
@@ -332,8 +397,12 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
         if (receiver != null && !receiver.containsUnknown()) {
             UBQualifier otherQualifier = UBQualifier.createUBQualifier(otherNodeAnno);
             String sequence = receiver.toString();
-            if (otherQualifier.hasSequenceWithOffsetNeg1(sequence)) {
-                otherQualifier = otherQualifier.glb(UBQualifier.createUBQualifier(sequence, "0"));
+            // Check if otherNode + c - 1 < receiver.length
+            if (otherQualifier.hasSequenceWithOffset(sequence, lengthOffset - 1)) {
+                // Add otherNode + c < receiver.length
+                UBQualifier newQualifier =
+                        UBQualifier.createUBQualifier(sequence, Integer.toString(lengthOffset));
+                otherQualifier = otherQualifier.glb(newQualifier);
                 for (Node internal : splitAssignments(otherNode)) {
                     Receiver leftRec =
                             FlowExpressions.internalReprOf(analysis.getTypeFactory(), internal);
@@ -365,10 +434,10 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
         // T = minusOffset(type(leftNode), rightNode) and
         // S = minusOffset(type(rightNode), leftNode)
 
-        UBQualifier left = getUBQualifier(n.getLeftOperand(), in);
+        UBQualifier left = getUBQualifierForAddition(n.getLeftOperand(), in);
         UBQualifier T = left.minusOffset(n.getRightOperand(), atypeFactory);
 
-        UBQualifier right = getUBQualifier(n.getRightOperand(), in);
+        UBQualifier right = getUBQualifierForAddition(n.getRightOperand(), in);
         UBQualifier S = right.minusOffset(n.getLeftOperand(), atypeFactory);
 
         UBQualifier glb = T.glb(S);
@@ -406,7 +475,7 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
         for (String sequence : i.getSequences()) {
             if (i.isLessThanLengthOf(sequence)) {
                 lessThan.add(sequence);
-            } else if (i.hasSequenceWithOffsetNeg1(sequence)) {
+            } else if (i.hasSequenceWithOffset(sequence, -1)) {
                 lessThanOrEqaul.add(sequence);
             }
         }
@@ -451,6 +520,9 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
      */
     private TransferResult<CFValue, CFStore> visitLengthAccess(
             Node n, TransferInput<CFValue, CFStore> in, Receiver sequenceRec, Tree sequenceTree) {
+        if (sequenceTree == null) {
+            return null;
+        }
         // Look up the SameLen type of the sequence.
         AnnotationMirror sameLenAnno = atypeFactory.sameLenAnnotationFromTree(sequenceTree);
         List<String> sameLenSequences =
@@ -503,19 +575,57 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
     public TransferResult<CFValue, CFStore> visitMethodInvocation(
             MethodInvocationNode n, TransferInput<CFValue, CFStore> in) {
 
-        if (atypeFactory.getMethodIdentifier().isStringLengthInvocation(n)) {
+        if (atypeFactory.getMethodIdentifier().isLengthOfMethodInvocation(n)) {
             Receiver stringLength = FlowExpressions.internalReprOf(atypeFactory, n);
             if (stringLength instanceof MethodCall) {
-                Receiver stringRec = ((MethodCall) stringLength).getReceiver();
-                Tree stringTree = n.getTarget().getReceiver().getTree();
-                TransferResult<CFValue, CFStore> result =
-                        visitLengthAccess(n, in, stringRec, stringTree);
-                if (result != null) {
-                    return result;
+                Receiver receiverRec = ((MethodCall) stringLength).getReceiver();
+                Tree receiverTree = n.getTarget().getReceiver().getTree();
+                // receiverTree is null when the receiver is implicit "this".
+                if (receiverTree != null) {
+                    TransferResult<CFValue, CFStore> result =
+                            visitLengthAccess(n, in, receiverRec, receiverTree);
+                    if (result != null) {
+                        return result;
+                    }
                 }
             }
         }
         return super.visitMethodInvocation(n, in);
+    }
+
+    /**
+     * Returns the UBQualifier for a node, with additional refinement useful specifically for
+     * integer addition, based on the information from subcheckers of the Index Checker.
+     *
+     * @param n the node
+     * @param in dataflow analysis transfer input
+     * @return the UBQualifier for {@code node}
+     */
+    private UBQualifier getUBQualifierForAddition(Node n, TransferInput<CFValue, CFStore> in) {
+
+        // The method takes the greatest lower bound of the qualifier returned by
+        // getUBQualifier and a qualifier created from a SubstringIndexFor annotation, if such
+        // annotation is present and the index is known to be non-negative.
+
+        UBQualifier ubQualifier = getUBQualifier(n, in);
+        Tree nodeTree = n.getTree();
+        // Annotation from the Substring Index hierarchy
+        AnnotatedTypeMirror substringIndexType =
+                atypeFactory.getSubstringIndexAnnotatedTypeFactory().getAnnotatedType(nodeTree);
+        AnnotationMirror substringIndexAnno =
+                substringIndexType.getAnnotation(SubstringIndexFor.class);
+        // Annotation from the Lower bound hierarchy
+        AnnotatedTypeMirror lowerBoundType =
+                atypeFactory.getLowerBoundAnnotatedTypeFactory().getAnnotatedType(nodeTree);
+        // If the index has an SubstringIndexFor annotation and at the same time is non-negative,
+        // convert the SubstringIndexFor annotation to a upper bound qualifier.
+        if (substringIndexAnno != null
+                && (lowerBoundType.hasAnnotation(NonNegative.class)
+                        || lowerBoundType.hasAnnotation(Positive.class))) {
+            UBQualifier substringIndexQualifier = UBQualifier.createUBQualifier(substringIndexAnno);
+            ubQualifier = ubQualifier.glb(substringIndexQualifier);
+        }
+        return ubQualifier;
     }
 
     /**
@@ -576,5 +686,18 @@ public class UpperBoundTransfer extends IndexAbstractTransfer {
             CFStore info = in.getRegularStore();
             return new RegularTransferResult<>(finishValue(value, info), info);
         }
+    }
+
+    @Override
+    public TransferResult<CFValue, CFStore> visitCase(
+            CaseNode n, TransferInput<CFValue, CFStore> in) {
+        TransferResult<CFValue, CFStore> result = super.visitCase(n, in);
+        // Refines subtrahend in the switch expression
+        // TODO: this cannot be done in strengthenAnnotationOfEqualTo, because that does not provide transfer input
+        Node caseNode = n.getCaseOperand();
+        AssignmentNode assign = (AssignmentNode) n.getSwitchOperand();
+        Node switchNode = assign.getExpression();
+        refineSubtrahendWithOffset(switchNode, caseNode, false, in, result.getThenStore());
+        return result;
     }
 }

@@ -50,12 +50,11 @@ import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
 import org.checkerframework.framework.type.typeannotator.ListTypeAnnotator;
 import org.checkerframework.framework.type.typeannotator.TypeAnnotator;
-import org.checkerframework.framework.util.AnnotationBuilder;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.ElementUtils;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.TreeUtils;
 import org.checkerframework.javacutil.TypesUtils;
 
@@ -65,8 +64,6 @@ import org.checkerframework.javacutil.TypesUtils;
  * another type-system whose safe initialization should be tracked. For an example, see the {@link
  * NullnessChecker}. Also supports rawness as a type-system for tracking initialization, though FBC
  * is preferred.
- *
- * @author Stefan Heule
  */
 public abstract class InitializationAnnotatedTypeFactory<
                 Value extends CFAbstractValue<Value>,
@@ -107,20 +104,20 @@ public abstract class InitializationAnnotatedTypeFactory<
         Set<Class<? extends Annotation>> tempInitAnnos = new LinkedHashSet<>();
 
         if (useFbc) {
-            COMMITTED = AnnotationUtils.fromClass(elements, Initialized.class);
-            FREE = AnnotationUtils.fromClass(elements, UnderInitialization.class);
-            NOT_ONLY_COMMITTED = AnnotationUtils.fromClass(elements, NotOnlyInitialized.class);
-            FBCBOTTOM = AnnotationUtils.fromClass(elements, FBCBottom.class);
-            UNCLASSIFIED = AnnotationUtils.fromClass(elements, UnknownInitialization.class);
+            COMMITTED = AnnotationBuilder.fromClass(elements, Initialized.class);
+            FREE = AnnotationBuilder.fromClass(elements, UnderInitialization.class);
+            NOT_ONLY_COMMITTED = AnnotationBuilder.fromClass(elements, NotOnlyInitialized.class);
+            FBCBOTTOM = AnnotationBuilder.fromClass(elements, FBCBottom.class);
+            UNCLASSIFIED = AnnotationBuilder.fromClass(elements, UnknownInitialization.class);
 
             tempInitAnnos.add(UnderInitialization.class);
             tempInitAnnos.add(Initialized.class);
             tempInitAnnos.add(UnknownInitialization.class);
             tempInitAnnos.add(FBCBottom.class);
         } else {
-            COMMITTED = AnnotationUtils.fromClass(elements, NonRaw.class);
+            COMMITTED = AnnotationBuilder.fromClass(elements, NonRaw.class);
             FBCBOTTOM = COMMITTED; // @NonRaw is also bottom
-            UNCLASSIFIED = AnnotationUtils.fromClass(elements, Raw.class);
+            UNCLASSIFIED = AnnotationBuilder.fromClass(elements, Raw.class);
             FREE = null; // unused
             NOT_ONLY_COMMITTED = null; // unused
 
@@ -599,12 +596,14 @@ public abstract class InitializationAnnotatedTypeFactory<
                 // anything can be assigned to this field.
                 type.replaceAnnotation(UNCLASSIFIED);
             } else if (computingAnnotatedTypeMirrorOfLHS) {
-                // The receiver is not initialized for this frame, but the type of a lhs is being computed.
+                // The receiver is not initialized for this frame, but the type of a lhs is being
+                // computed.
                 // Change the type of the field to @UnknownInitialization or @Raw so that
                 // anything can be assigned to this field.
                 type.replaceAnnotation(UNCLASSIFIED);
             } else {
-                // The receiver is not initialized for this frame and the type being computed is not a LHS.
+                // The receiver is not initialized for this frame and the type being computed is not
+                // a LHS.
                 // Replace all annotations with the top annotation for that hierarchy.
                 type.clearAnnotations();
                 type.addAnnotations(qualHierarchy.getTopAnnotations());
@@ -753,7 +752,8 @@ public abstract class InitializationAnnotatedTypeFactory<
                 return false;
             }
             // Now, either both annotations are @UnderInitialization, both annotations are
-            // @UnknownInitialization or anno1 is @UnderInitialization and anno2 is @UnknownInitialization.
+            // @UnknownInitialization or anno1 is @UnderInitialization and anno2 is
+            // @UnknownInitialization.
             assert (free1 && free2) || (unc1 && unc2) || (free1 && unc2);
             // Thus, we only need to look at the type frame.
             TypeMirror frame1 = getTypeFrameFromAnnotation(rhs);
@@ -817,7 +817,7 @@ public abstract class InitializationAnnotatedTypeFactory<
                 return a;
             }
 
-            return InternalUtils.leastUpperBound(processingEnv, a, b);
+            return TypesUtils.leastUpperBound(a, b, processingEnv);
         }
 
         @Override

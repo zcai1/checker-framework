@@ -100,8 +100,9 @@ package org.checkerframework.checker.nullness.qual does not exist
 
 If the error is
 
+% Don't remove the apostrophe here
 \begin{Verbatim}
-package org.checkerframework.checker.nullness.qual does not exist
+package 'org.checkerframework.checker.nullness.qual does not exist
 \end{Verbatim}
 
 \begin{sloppypar}
@@ -239,7 +240,8 @@ You may be able to solve the problem by running
 to re-generate files \code{checker/jdk/jdk\{8,9\}.jar} and \code{checker/bin/jdk\{8,9\}.jar}.
 
 That usually works, but if not, then you should recompile the Checker
-Framework from source rather than using the pre-compiled distribution.
+Framework from source (Section~\ref{build-source}) rather than using
+the pre-compiled distribution.
 
 
 \item
@@ -267,7 +269,7 @@ correct this by being sure to use \<fork="yes"> (see
 Section~\ref{ant-task}) and/or setting the \<build.compiler> property to
 \<extJavac>.
 
-If you are building from source  (Section~\ref{build-source}),
+If you are building from source (Section~\ref{build-source}),
 you might need to rebuild the Annotation
 File Utilities before recompiling or using the Checker Framework.
 
@@ -327,6 +329,19 @@ nested class.
 
 Similar arguments apply when annotating \<package.Outer.Nested>.
 
+\item
+A message of the form
+
+\begin{Verbatim}
+warning: StubParser: annotateTypeParameters: mismatched sizes
+\end{Verbatim}
+
+might be because you compiled your project with \<-source 1.4>.  Java 1.4
+doesn't support type parameters, but the Checker Framework expects that
+classes such as \<List> have a type parameter.  The discrepancy causes a
+problem.  To fix the problem, supply \<-source 1.5> or later, or no
+\<-source> command-line argument.
+
 \end{itemize}
 
 
@@ -339,21 +354,44 @@ give unexpected results.
 \begin{itemize}
 \item
   If the Checker Framework is unable to verify a property that you know is
-  true, then it is helpful to formulate an argument about why the property
-  is true.  Recall that the Checker Framework does modular verification,
+  true, then you should formulate a proof about why the property is true.
+  Your proof depends on some set of facts about the program and its
+  operation.  State them completely; for example, don't write ``the field
+  \<f> cannot be null when execution reaches line 22'', but justify
+  \emph{why} the field cannot be null.
+
+  Once you have written down your proof, translate each fact into a Java
+  annotation.
+
+  If you are unable to express some aspect of your proof as an annotation,
+  then the type system is not capable of reproducing your proof.  You might
+  need to find a different proof, or extend the type system to be more
+  expressive, or suppress the warning.
+
+  If you are able to express your entire proof as annotations, then look at
+  the Checker Framework error messages.  One possibility is that the errors
+  indicate that your proof was incomplete or incorrect.  Maybe your proof
+  implicitly depended on some fact you didn't write down, such as ``method
+  \<m> has no side effects.''  In this case, you should revise your proof
+  and add more annotations to your Java code.  Another possibility is that
+  your proof is incorrect, and the errors indicate where.  Another
+  possibility is that there is a bug in the type-checker.  In this case,
+  you should report it to the maintainers, giving your proof and explaining
+  why the type-checker should be able to make the same inferences that you did.
+
+  Recall that the Checker Framework does modular verification,
   one procedure at a time; it observes the specifications, but not the
   implementations, of other methods.
 
-  If any aspects of your argument are not expressed as annotations, then
-  you may need to write more annotations.  If any aspects of your argument
-  are not expressible as annotations, then you may need to extend the
-  type-checker.
+  Alo see Section~\ref{handling-warnings}, which explains this same
+  methodology in different words.
 
 \item
 If a checker seems to be ignoring the annotation on a method, then it is
 possible that the checker is reading the method's signature from its
-\code{.class} file, but the \code{.class} file was not created by the JSR
-308 compiler.  You can check whether the annotations actually appear in the
+\code{.class} file, but the \code{.class} file was not created by a Java 8
+or later compiler.
+You can check whether the annotations actually appear in the
 \code{.class} file by using the \code{javap} tool.
 
 If the annotations do not appear in the \code{.class} file, here are two
@@ -709,8 +747,8 @@ helpful if you:
   possibly other files as well.  Please attach the files, rather than
   pasting their contents into the body of your bug report or email message,
   because some mailers mangle formatting of pasted text.  If you
-  encountered a problem while using tool integration such as the Eclipse
-  plugin or Maven integration, then try to reproduce the problem from the
+  encountered a problem while using tool integration such as
+  Maven integration, then try to reproduce the problem from the
   command line as well --- this will indicate whether the problem is with
   the checker itself or with the tool integration.
 \item
@@ -742,6 +780,11 @@ When reporting bugs, please focus on realistic scenarios and well-written
 code.  We are sure that you can make up artificial code that stymies the
 type-checker!  Those aren't a good use of your time to report nor the
 maintainers' time to evaluate and fix.
+
+Please do not file an issue to report that some library class is not
+annotated.  Instead, please write the annotations (see
+Chapter~\ref{annotating-libraries}) and then submit a
+\ahref{https://github.com/typetools/checker-framework/pulls}{pull request}.
 
 
 \section{Building from source\label{build-source}}
@@ -775,8 +818,8 @@ Follow the instructions for your operating system.
 
 \begin{Verbatim}
 sudo apt-get update
-sudo apt-get install --yes ant dia git hevea junit4 librsvg2-bin make \
- mercurial openjdk-8-jdk texlive-latex-base texlive-latex-recommended \
+sudo apt-get install --yes ant dia git hevea junit4 librsvg2-bin libcurl3-gnutls \
+ make maven mercurial openjdk-8-jdk texlive-latex-base texlive-latex-recommended \
  texlive-latex-extra texlive-fonts-recommended unzip
 \end{Verbatim}
 
@@ -784,30 +827,38 @@ sudo apt-get install --yes ant dia git hevea junit4 librsvg2-bin make \
 
 \item[Mac OS]
   If you employ \ahref{https://brew.sh}{homebrew} to install packages, run
-  the following commands:
+  the following commands (you may need to update the version number (\<2.31>):
 
 \begin{Verbatim}
 brew update
 brew install caskroom/cask/brew-cask
-brew install git ant hevea mercurial librsvg unzip make
+brew install git ant hevea maven mercurial librsvg unzip make
 brew cask install java
 brew cask install mactex
 mkdir -p $HOME/Library/texmf/tex/latex
-cp -p /usr/local/Cellar/hevea/2.28/lib/hevea/hevea.sty $HOME/Library/texmf/tex/latex/
+cp -p /usr/local/Cellar/hevea/2.31/lib/hevea/hevea.sty $HOME/Library/texmf/tex/latex/
 \end{Verbatim}
 
+Also set the \<JAVA\_HOME> environment variable in your \<.bashrc> file;
+for example,
+
+\begin{Verbatim}
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_144.jdk/Contents/Home
+\end{Verbatim}
+
+
 \item[Windows]
-  To building on Windows 10,
+  To build on Windows 10,
   run \<bash> to obtain a version of
   Ubuntu (provided by the Windows Subsystem for Linux) and follow the Ubuntu
   instructions.
 
-To building on other versions of Windows,
-here is an \emph{incomplete} list of needed prerequisites:
-\begin{itemize}
-\item
-  Install MSYS to obtain the \<cp> and \<make> commands.
-\end{itemize}
+% To build on other versions of Windows,
+% here is an \emph{incomplete} list of needed prerequisites:
+% \begin{itemize}
+% \item
+%   Install MSYS to obtain the \<cp> and \<make> commands.
+% \end{itemize}
 
 \end{description}
 
@@ -823,6 +874,7 @@ cd $JSR308
 hg clone https://bitbucket.org/typetools/jsr308-langtools jsr308-langtools
 git clone https://github.com/typetools/checker-framework.git checker-framework
 git clone https://github.com/typetools/annotation-tools.git annotation-tools
+git clone https://github.com/typetools/stubparser.git stubparser
 \end{Verbatim}
 % $ to unconfuse Emacs LaTeX mode
 
@@ -921,6 +973,19 @@ You do not need to add the Annotation File Utilities to the path, as
 the Checker Framework build finds it using relative paths.
 
 
+\subsection{Build the StubParser\label{stubparser-building}}
+
+This is simply done by:
+
+\begin{Verbatim}
+  cd $JSR308/stubparser
+  mvn package -Dmaven.test.skip=true
+\end{Verbatim}
+
+You do not need to add the StubParser to the path, as
+the Checker Framework build finds it using relative paths.
+
+
 \subsection{Build the Checker Framework\label{building}}
 
 % Building (compiling) the checkers and framework from source creates the
@@ -1015,10 +1080,38 @@ Run \code{make} in the \code{docs/manual} directory to build both the PDF and HT
 \end{enumerate}
 
 
+\subsection{Configure Eclipse to edit the Checker Framework\label{building-eclipse}}
+
+These instructions are relevant if you use Eclipse as your IDE\@.
+
+\begin{enumerate}
+\item Follow the instructions earlier in Section~\ref{build-source} to
+clone and build all projects from their sources.
+\item Download Eclipse from
+the \href{https://www.eclipse.org/downloads}{official Eclipse website}
+and install it.
+\item Run Eclipse and set the
+workspace to the directory pointed to by \code{\$JSR308}.
+\item Enter the main Eclipse working screen and in the ``File'' menu,
+select ``Import'' $\rightarrow$ ``General'' $\rightarrow$ ``Existing
+Projects into workspace''.
+\item After the ``Import Projects'' window appears, select ``Select
+Root Directory'', and select the directory pointed to by \code{\$JSR308}.
+\item Select all the projects in the folder except for the ones
+related to ``Eclipse'', ``encryption'', ``tutorial'', and ``demo''.
+\end{enumerate}
+Eclipse should successfully build all the imported projects.
+If Eclipse reports any errors, ensure you followed the instructions
+in Section~\ref{build-source}.
+
+
 \subsection{Enable Travis continuous integration builds\label{building-travis}}
 
+Travis-CI is a continuous integration system:  it runs tests every time you
+push a commit to GitHub.
+
 If you have forked any of the projects rather than just creating a clone,
-then we recommend that you enable Travis-CI continuous integration builds,
+then we recommend that you enable Travis-CI builds,
 so that you learn quickly of any errors that creep into your fork.
 
 Run the
@@ -1042,6 +1135,29 @@ the JDK (some jobs might time out).
 \item Verify that all tests pass.
 \item A Checker Framework developer will review your code and merge your branch.
 \end{enumerate}
+
+
+\subsubsection{Debugging Travis continuous integration builds\label{building-travis-debug}}
+
+If a Travis job is failing, you can reproduce the problem locally.
+The Travis jobs all run within Docker containers.
+Install Docker on your local computer, then perform commands like the
+following to get a shell within Docker:
+
+\begin{Verbatim}
+docker pull mdernst/ubuntu-for-cf-jdk8
+docker run -it mdernst/ubuntu-for-cf-jdk8 /bin/bash
+\end{Verbatim}
+
+Then, you can run arbitrary commands, including those that appear in the
+\<docker run> command in the \<.travis.yml> file.  For example:
+
+\begin{Verbatim}
+export JAVA_HOME=`which javac|xargs readlink -f|xargs dirname|xargs dirname`
+git clone -b $BRANCHNAME --depth 9 https://github.com/$USER/checker-framework.git checker-framework
+cd checker-framework
+./.travis-build.sh all-tests downloadjdk
+\end{Verbatim}
 
 
 \subsection{Code style\label{code-style}}
@@ -1165,7 +1281,7 @@ Another implementation of Universe Types and \href{http://www.cs.rpi.edu/~huangw
 ``Inference and checking of object ownership''~\cite{HuangDME2012} (ECOOP 2012, \myurl{http://homes.cs.washington.edu/~mernst/pubs/infer-ownership-ecoop2012-abstract.html}).
 
 \item[Approximate data (Section~\ref{enerj-checker})]
-``EnerJ: Approximate Data Types for Safe and General Low-Power Computation''~\cite{SampsonDFGCG2011} (PLDI 2011, \myurl{http://www.cs.cornell.edu/~asampson/media/papers/enerj-pldi2011.pdf})
+``EnerJ: Approximate Data Types for Safe and General Low-Power Computation''~\cite{SampsonDFGCG2011} (PLDI 2011, \myurl{https://homes.cs.washington.edu/~luisceze/publications/Enerj-pldi2011.pdf})
 
 \item[Information flow and tainting (Section~\ref{sparta-checker})]
 ``Collaborative Verification of Information Flow
@@ -1214,7 +1330,7 @@ is a verification tool that prevents or detects all errors of a given variety.  
 alternate approach is to use a bug detector such as
 \href{http://findbugs.sourceforge.net/}{FindBugs},
 \href{http://jlint.sourceforge.net/}{Jlint}, or
-\href{http://pmd.sourceforge.net/}{PMD}.
+\href{https://pmd.github.io}{PMD}.
 
 A pluggable type-checker or verifier
 differs from a bug detector in several ways:

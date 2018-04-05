@@ -19,9 +19,9 @@ import org.checkerframework.dataflow.util.HashCodeUtils;
 
 public class SynchronizedNode extends Node {
 
-    protected /*@Nullable*/ Tree tree;
-    protected Node expression;
-    protected boolean startOfBlock;
+    protected final /*@Nullable*/ Tree tree;
+    protected final Node expression;
+    protected final boolean startOfBlock;
 
     public SynchronizedNode(
             /*@Nullable*/ Tree tree, Node expression, boolean startOfBlock, Types types) {
@@ -51,9 +51,10 @@ public class SynchronizedNode extends Node {
 
     @Override
     public String toString() {
-        StringBuffer sb = new StringBuffer();
-        sb.append("synchronized ");
-        sb.append("(" + expression + ")");
+        StringBuilder sb = new StringBuilder();
+        sb.append("synchronized (");
+        sb.append(expression);
+        sb.append(")");
         return sb.toString();
     }
 

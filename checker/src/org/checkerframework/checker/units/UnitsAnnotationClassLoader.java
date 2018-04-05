@@ -5,7 +5,7 @@ import javax.lang.model.element.AnnotationMirror;
 import org.checkerframework.checker.units.qual.UnitsMultiple;
 import org.checkerframework.common.basetype.BaseTypeChecker;
 import org.checkerframework.framework.type.AnnotationClassLoader;
-import org.checkerframework.framework.util.AnnotationBuilder;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 
 public class UnitsAnnotationClassLoader extends AnnotationClassLoader {
@@ -36,7 +36,8 @@ public class UnitsAnnotationClassLoader extends AnnotationClassLoader {
             // TODO : special treatment of invisible qualifiers?
 
             // if the annotation is a SI prefix multiple of some base unit, then return false
-            // classic Units checker does not need to load the annotations of SI prefix multiples of base units
+            // classic Units checker does not need to load the annotations of SI prefix multiples of
+            // base units
             if (AnnotationUtils.areSameByClass(metaAnno, UnitsMultiple.class)) {
                 return false;
             }

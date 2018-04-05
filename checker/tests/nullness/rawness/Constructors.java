@@ -1,9 +1,10 @@
+import java.util.Date;
 import org.checkerframework.checker.initialization.qual.UnknownInitialization;
 import org.checkerframework.checker.nullness.qual.*;
 
 // @skip-test -- should be fixed, but is a bit tricky to implement, so defer for now.
 // See https://github.com/typetools/checker-framework/issues/223
-class Constructors {
+class ConstructorsRawness {
 
     static void requireInitialized(Object o) {}
 
@@ -15,9 +16,9 @@ class Constructors {
         }
     }
 
-    public Constructors() {
+    public ConstructorsRawness() {
 
-        //:: error: (argument.type.incompatible)
+        // :: error: (argument.type.incompatible)
         Box b1 = new Box(this);
         Box b2 = new Box("hello");
         requireInitialized(b2);
@@ -45,6 +46,6 @@ class Constructors {
 }
 
 /* Local Variables: */
-/* compile-command: "javac -processor org.checkerframework.checker.nullness.NullnessChecker -Xbootclasspath/p:$CHECKERFRAMEWORK/checker/dist/jdk7.jar Constructors.java" */
-/* compile-history: ("javac -processor org.checkerframework.checker.nullness.NullnessChecker -Xbootclasspath/p:$CHECKERFRAMEWORK/checker/dist/jdk7.jar Constructors.java") */
+/* compile-command: "javac -processor org.checkerframework.checker.nullness.NullnessChecker -Xbootclasspath/p:$CHECKERFRAMEWORK/checker/dist/jdk8.jar ConstructorsRawness.java" */
+/* compile-history: ("javac -processor org.checkerframework.checker.nullness.NullnessChecker -Xbootclasspath/p:$CHECKERFRAMEWORK/checker/dist/jdk8.jar ConstructorsRawness.java") */
 /* End: */

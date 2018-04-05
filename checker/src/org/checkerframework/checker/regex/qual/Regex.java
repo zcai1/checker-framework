@@ -14,8 +14,10 @@ import org.checkerframework.framework.qual.SubtypeOf;
  * will be a legal regular expression with at least two capturing groups. The type states that
  * possible run-time values include {@code "(a*)(b*)"}, {@code "a(b?)c(d?)e"}, and {@code
  * "(.)(.)(.)"}, but not {@code "hello"} nor {@code "(good)bye"} nor {@code "(a*)(b*)("}.
+ *
+ * @checker_framework.manual #regex-checker Regex Checker
  */
-//@ImplicitFor(trees = { Tree.Kind.NULL_LITERAL })
+// @ImplicitFor(trees = { Tree.Kind.NULL_LITERAL })
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE_USE, ElementType.TYPE_PARAMETER})
 @SubtypeOf(UnknownRegex.class)

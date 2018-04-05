@@ -7,14 +7,13 @@ import javax.lang.model.type.TypeMirror;
  * Implementation of a {@link TransferResult} with just one non-exceptional store. The result of
  * {@code getThenStore} and {@code getElseStore} is equal to the only underlying store.
  *
- * @author Stefan Heule
  * @param <S> the {@link Store} used to keep track of intermediate results
  */
 public class RegularTransferResult<A extends AbstractValue<A>, S extends Store<S>>
         extends TransferResult<A, S> {
 
     /** The regular result store. */
-    protected S store;
+    protected final S store;
 
     private final boolean storeChanged;
 
@@ -33,9 +32,7 @@ public class RegularTransferResult<A extends AbstractValue<A>, S extends Store<S
      * class.
      */
     public RegularTransferResult(A value, S resultStore, boolean storeChanged) {
-        super(value);
-        this.store = resultStore;
-        this.storeChanged = storeChanged;
+        this(value, resultStore, null, storeChanged);
     }
 
     public RegularTransferResult(A value, S resultStore) {
@@ -63,10 +60,9 @@ public class RegularTransferResult<A extends AbstractValue<A>, S extends Store<S
      */
     public RegularTransferResult(
             A value, S resultStore, Map<TypeMirror, S> exceptionalStores, boolean storeChanged) {
-        super(value);
+        super(value, exceptionalStores);
         this.store = resultStore;
         this.storeChanged = storeChanged;
-        this.exceptionalStores = exceptionalStores;
     }
 
     public RegularTransferResult(A value, S resultStore, Map<TypeMirror, S> exceptionalStores) {

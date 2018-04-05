@@ -3,7 +3,6 @@ package org.checkerframework.dataflow.cfg.node;
 /**
  * A visitor for a {@link Node} tree.
  *
- * @author Stefan Heule
  * @param <R> return type of the visitor. Use {@link Void} if the visitor does not have a return
  *     value.
  * @param <P> parameter type of the visitor. Use {@link Void} if the visitor does not have a
@@ -111,6 +110,8 @@ public interface NodeVisitor<R, P> {
     R visitSuper(SuperNode n, P p);
 
     R visitReturn(ReturnNode n, P p);
+
+    R visitLambdaResultExpression(LambdaResultExpressionNode n, P p);
 
     R visitStringConversion(StringConversionNode n, P p);
 

@@ -1,19 +1,13 @@
 package tests;
 
 import java.io.File;
-import java.lang.Override;
-import java.lang.String;
 import java.util.ArrayList;
 import java.util.List;
 import org.checkerframework.framework.test.CheckerFrameworkPerDirectoryTest;
 import org.junit.runners.Parameterized.Parameters;
 import testlib.reflection.ReflectionTestChecker;
 
-/**
- * Tests the reflection resolution using a toy type system.
- *
- * @author rjust, smillst
- */
+/** Tests the reflection resolution using a toy type system. */
 public class ReflectionTest extends CheckerFrameworkPerDirectoryTest {
 
     public ReflectionTest(List<File> testFiles) {

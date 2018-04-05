@@ -27,7 +27,6 @@ import org.checkerframework.dataflow.qual.Pure;
  *
  * @see Format
  * @checker_framework.manual #formatter-checker Format String Checker
- * @author Konstantin Weitz
  */
 public enum ConversionCategory {
     /** Use if the parameter can be of any type. Applicable for conversions b, B, h, H, s, S. */
@@ -112,7 +111,9 @@ public enum ConversionCategory {
         this.chars = chars;
     }
 
+    @SuppressWarnings("ImmutableEnumChecker") // TODO: clean this up!
     public final Class<? extends Object>[] types;
+
     public final String chars;
 
     /**

@@ -4,6 +4,7 @@ import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.util.Context;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -14,6 +15,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.IntersectionType;
 import javax.lang.model.type.TypeKind;
@@ -42,9 +45,96 @@ import org.checkerframework.javacutil.TypesUtils;
  * circular references, will be created.
  */
 public class BoundsInitializer {
-    //==================================================================================================================
-    // Static helper methods called from AnnotatedTypeMirror to initialize bounds of wildcards or type variables
-    //==================================================================================================================
+    // ============================================================================================
+    // Static helper methods called from AnnotatedTypeMirror to initialize bounds of wildcards or
+    // type variables
+    // ============================================================================================
+
+    /**
+     * Initializes the type arguments of {@code declaredType}. The upper bound of unbound wildcards
+     * is set to the upper bound of the type parameter for which it is an argument. If {@code
+     * declaredType} is raw, then the type arguments are uninferred wildcards.
+     *
+     * @param declaredType type whose arguments are initialized.
+     */
+    public static void initializeTypeArgs(AnnotatedDeclaredType declaredType) {
+        final DeclaredType actualType = (DeclaredType) declaredType.actualType;
+        if (actualType.getTypeArguments().isEmpty() && !declaredType.wasRaw()) {
+            // No type arguments to infer.
+            return;
+        }
+
+        final TypeElement typeElement =
+                (TypeElement) declaredType.atypeFactory.types.asElement(actualType);
+        final List<AnnotatedTypeMirror> typeArgs = new ArrayList<>();
+
+        // Create AnnotatedTypeMirror for each type argument and store them in the typeArgsMap.
+        Map<TypeVariable, AnnotatedTypeMirror> typeArgMap = new HashMap<>();
+        for (int i = 0; i < typeElement.getTypeParameters().size(); i++) {
+            TypeMirror javaTypeArg;
+            if (declaredType.wasRaw()) {
+                TypeVariable typeVariable =
+                        (TypeVariable) typeElement.getTypeParameters().get(i).asType();
+                javaTypeArg = getUpperBoundAsWildcard(typeVariable, declaredType.atypeFactory);
+            } else {
+                javaTypeArg = declaredType.getUnderlyingType().getTypeArguments().get(i);
+            }
+
+            final AnnotatedTypeMirror typeArg =
+                    AnnotatedTypeMirror.createType(javaTypeArg, declaredType.atypeFactory, false);
+            if (typeArg.getKind() == TypeKind.WILDCARD) {
+                AnnotatedWildcardType wildcardType = (AnnotatedWildcardType) typeArg;
+                wildcardType.setTypeVariable(typeElement.getTypeParameters().get(i));
+                if (declaredType.wasRaw()) {
+                    wildcardType.setUninferredTypeArgument();
+                }
+            }
+            typeArgs.add(typeArg);
+            typeArgMap.put((TypeVariable) typeElement.getTypeParameters().get(i).asType(), typeArg);
+        }
+
+        // Initialize type argument bounds using the typeArgsMap.
+        for (AnnotatedTypeMirror typeArg : typeArgs) {
+            switch (typeArg.getKind()) {
+                case WILDCARD:
+                    AnnotatedWildcardType wildcardType = (AnnotatedWildcardType) typeArg;
+                    initializeExtendsBound(wildcardType, typeArgMap);
+                    initializeSuperBound(wildcardType, typeArgMap);
+                    break;
+                case TYPEVAR:
+                    initializeBounds((AnnotatedTypeVariable) typeArg, typeArgMap);
+                    break;
+                default:
+                    // do nothing
+            }
+        }
+        declaredType.typeArgs = Collections.unmodifiableList(typeArgs);
+    }
+
+    /**
+     * Returns a wildcard whose upper bound is the same as {@code typeVariable}. If the upper bound
+     * is an intersection, then this method returns an unbound wildcard.
+     */
+    private static WildcardType getUpperBoundAsWildcard(
+            TypeVariable typeVariable, AnnotatedTypeFactory factory) {
+        TypeMirror upperBound = typeVariable.getUpperBound();
+        switch (upperBound.getKind()) {
+            case ARRAY:
+            case DECLARED:
+            case TYPEVAR:
+                return factory.types.getWildcardType(upperBound, null);
+            case INTERSECTION:
+                // Can't create a wildcard with an intersection as the upper bound, so use
+                // an unbound wildcard instead.  The extends bound of the
+                // AnnotatedWildcardType will be initialized properly by this class.
+                return factory.types.getWildcardType(null, null);
+            default:
+                ErrorReporter.errorAbort(
+                        "Unexpected upper bound kind: %s type: %s",
+                        upperBound.getKind(), upperBound);
+                return null; // dead code
+        }
+    }
 
     /**
      * Create the entire lower bound and upper bound, with no missing information, for typeVar. If a
@@ -53,15 +143,27 @@ public class BoundsInitializer {
      * @param typeVar the type variable whose lower bound is being initialized
      */
     public static void initializeBounds(final AnnotatedTypeVariable typeVar) {
+        initializeBounds(typeVar, null);
+    }
+
+    /**
+     * Create the entire lower bound and upper bound, with no missing information, for typeVar. If a
+     * typeVar is recursive the appropriate cycles will be introduced in the type
+     *
+     * @param typeVar the type variable whose lower bound is being initialized
+     * @param map a mapping of type parameters to type arguments. May be null.
+     */
+    private static void initializeBounds(
+            final AnnotatedTypeVariable typeVar, Map<TypeVariable, AnnotatedTypeMirror> map) {
         final Set<AnnotationMirror> annos = saveAnnotations(typeVar);
 
         InitializerVisitor visitor =
-                new InitializerVisitor(new TypeVariableStructure(null, typeVar));
+                new InitializerVisitor(new TypeVariableStructure(null, typeVar), map);
         visitor.initializeLowerBound(typeVar);
         visitor.resolveTypeVarReferences(typeVar);
 
         InitializerVisitor visitor2 =
-                new InitializerVisitor(new TypeVariableStructure(null, typeVar));
+                new InitializerVisitor(new TypeVariableStructure(null, typeVar), map);
         visitor2.initializeUpperBound(typeVar);
         visitor2.resolveTypeVarReferences(typeVar);
 
@@ -106,9 +208,21 @@ public class BoundsInitializer {
      * @param wildcard the wildcard whose lower bound is being initialized
      */
     public static void initializeSuperBound(final AnnotatedWildcardType wildcard) {
+        initializeSuperBound(wildcard, null);
+    }
+
+    /**
+     * Create the entire super bound, with no missing information, for wildcard. If a wildcard is
+     * recursive the appropriate cycles will be introduced in the type
+     *
+     * @param wildcard the wildcard whose lower bound is being initialized
+     * @param map a mapping of type parameters to type arguments. May be null.
+     */
+    private static void initializeSuperBound(
+            final AnnotatedWildcardType wildcard, Map<TypeVariable, AnnotatedTypeMirror> map) {
         final Set<AnnotationMirror> annos = saveAnnotations(wildcard);
 
-        InitializerVisitor visitor = new InitializerVisitor(new WildcardStructure());
+        InitializerVisitor visitor = new InitializerVisitor(new WildcardStructure(), map);
         visitor.initializeSuperBound(wildcard);
         visitor.resolveTypeVarReferences(wildcard);
 
@@ -122,17 +236,28 @@ public class BoundsInitializer {
      * @param wildcard the wildcard whose extends bound is being initialized
      */
     public static void initializeExtendsBound(final AnnotatedWildcardType wildcard) {
-        final Set<AnnotationMirror> annos = saveAnnotations(wildcard);
+        initializeExtendsBound(wildcard, null);
+    }
 
-        InitializerVisitor visitor = new InitializerVisitor(new WildcardStructure());
+    /**
+     * Create the entire extends bound, with no missing information, for wildcard. If a wildcard is
+     * recursive the appropriate cycles will be introduced in the type
+     *
+     * @param wildcard the wildcard whose extends bound is being initialized
+     * @param map a mapping of type parameters to type arguments. May be null.
+     */
+    private static void initializeExtendsBound(
+            final AnnotatedWildcardType wildcard, Map<TypeVariable, AnnotatedTypeMirror> map) {
+        final Set<AnnotationMirror> annos = saveAnnotations(wildcard);
+        InitializerVisitor visitor = new InitializerVisitor(new WildcardStructure(), map);
         visitor.initializeExtendsBound(wildcard);
         visitor.resolveTypeVarReferences(wildcard);
         restoreAnnotations(wildcard, annos);
     }
 
-    //==================================================================================================================
+    // ============================================================================================
     // Classes and methods used to make the above static helper methods work
-    //==================================================================================================================
+    // ============================================================================================
 
     /**
      * Creates the AnnotatedTypeMirrors (without annotations) for the bounds of all type variables
@@ -153,22 +278,28 @@ public class BoundsInitializer {
         private final Map<WildcardType, AnnotatedWildcardType> wildcards = new HashMap<>();
         private final Map<IntersectionType, AnnotatedIntersectionType> intersections =
                 new HashMap<>();
+        private final Map<TypeVariable, AnnotatedTypeMirror> typevars;
         // need current bound path
 
-        public InitializerVisitor(final BoundStructure boundStructure) {
+        public InitializerVisitor(
+                BoundStructure boundStructure, Map<TypeVariable, AnnotatedTypeMirror> typevars) {
             this.topLevelStructure = boundStructure;
             this.currentStructure = boundStructure;
+            if (typevars != null) {
+                this.typevars = typevars;
+            } else {
+                this.typevars = new HashMap<>();
+            }
+            if (boundStructure instanceof TypeVariableStructure) {
+                TypeVariableStructure typeVarStruct = (TypeVariableStructure) boundStructure;
+                typeVarToStructure.put(typeVarStruct.typeVar, typeVarStruct);
+            }
         }
 
-        public InitializerVisitor(final TypeVariableStructure typeVarStruct) {
-            this((BoundStructure) typeVarStruct);
-            typeVarToStructure.put(typeVarStruct.typeVar, typeVarStruct);
-        }
-
-        //--------------------------------------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------------------------
         // Visit methods that keep track of the path traversed through type variable bounds, and the
         // wildcards/intersections that have been encountered.
-        //--------------------------------------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------------------------
 
         @Override
         public Void visit(AnnotatedTypeMirror type) {
@@ -226,7 +357,7 @@ public class BoundsInitializer {
                 // Only recur on component type if it's not a primitive.
                 // Array component types are the only place a primitive is allowed in bounds
                 final BoundPathNode componentNode = addPathNode(new ArrayComponentNode());
-                type.setComponentType(replaceOrVisit(type.getComponentType()));
+                type.setComponentType(getOrVisit(type.getComponentType()));
                 removePathNode(componentNode);
             }
             return null;
@@ -294,34 +425,40 @@ public class BoundsInitializer {
             return invalidType(type);
         }
 
-        public AnnotatedTypeMirror replaceOrVisit(final AnnotatedTypeMirror type) {
-            if (type.getKind() == TypeKind.WILDCARD) {
-                final AnnotatedWildcardType wildcard = (AnnotatedWildcardType) type;
-                if (wildcards.containsKey(wildcard.getUnderlyingType())) {
-                    return wildcards.get(wildcard.getUnderlyingType());
-
-                } else {
-
-                    visit(wildcard);
-                }
-
-                return wildcard;
-
-            } else if (type.getKind() == TypeKind.INTERSECTION) {
-                if (intersections.containsKey(type.getUnderlyingType())) {
-                    return intersections.get(type.getUnderlyingType());
-                }
-
-                visit(type);
-                return type;
-
-            } else {
-                visit(type);
-                return type;
+        /**
+         * If the underlying type of (@code type} has been visited before, return the previous
+         * AnnotatedTypeMirror. Otherwise, visit {@code type} and return it.
+         *
+         * @param type type to visit.
+         * @return {@code type} or an AnnotatedTypeMirror with the same underlying type that was
+         *     previously visited.
+         */
+        public AnnotatedTypeMirror getOrVisit(final AnnotatedTypeMirror type) {
+            switch (type.getKind()) {
+                case WILDCARD:
+                    final AnnotatedWildcardType wildcard = (AnnotatedWildcardType) type;
+                    if (wildcards.containsKey(wildcard.getUnderlyingType())) {
+                        return wildcards.get(wildcard.getUnderlyingType());
+                    }
+                    break;
+                case INTERSECTION:
+                    if (intersections.containsKey(type.getUnderlyingType())) {
+                        return intersections.get(type.getUnderlyingType());
+                    }
+                    break;
+                case TYPEVAR:
+                    if (typevars.containsKey(type.getUnderlyingType())) {
+                        return typevars.get(type.getUnderlyingType());
+                    }
+                    break;
+                default:
+                    // do nothing
             }
+            visit(type);
+            return type;
         }
 
-        //--------------------------------------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------------------------
         //
         public void initializeUpperBound(final AnnotatedTypeVariable typeVar) {
             final AnnotatedTypeMirror upperBound = createAndSetUpperBound(typeVar);
@@ -349,7 +486,7 @@ public class BoundsInitializer {
             if (underlyingSuperBound == null) {
                 underlyingSuperBound =
                         TypesUtils.wildLowerBound(
-                                wildcard.atypeFactory.processingEnv, underlyingType);
+                                underlyingType, wildcard.atypeFactory.processingEnv);
             }
 
             final AnnotatedTypeMirror superBound =
@@ -366,21 +503,27 @@ public class BoundsInitializer {
         public void initializeExtendsBound(final AnnotatedWildcardType wildcard) {
             final AnnotatedTypeFactory typeFactory = wildcard.atypeFactory;
 
-            final WildcardType underlyingType = wildcard.getUnderlyingType();
-            TypeMirror underlyingExtendsBound = underlyingType.getExtendsBound();
-            if (underlyingExtendsBound == null) {
-                //TODO: AnnotatedTypeFactory#widenToUpperBound) and
-                // SupertypeFinder#fixWildcardBound have similar logic for handling unbounded wildcards.
-                // Merging those methods and this into AnnotatedWildcardType would improve the code greatly and
-                // still be easier than implementing all of capture conversion
-                // Take the upper bound of the type variable the wildcard is bound to.
-                underlyingExtendsBound =
+            WildcardType javaWildcardType = wildcard.getUnderlyingType();
+            TypeMirror javaExtendsBound;
+            if (javaWildcardType.getExtendsBound() != null) {
+                // If the wildcard type has an extends bound, use it.
+                javaExtendsBound = javaWildcardType.getExtendsBound();
+            } else if (wildcard.getTypeVariable() != null) {
+                // Otherwise use the upper bound of the type variable associated with this wildcard.
+                javaExtendsBound = wildcard.getTypeVariable().getUpperBound();
+            } else {
+                // Otherwise use the upper bound of the java wildcard.
+                javaExtendsBound =
                         TypesUtils.wildUpperBound(
-                                wildcard.atypeFactory.processingEnv, underlyingType);
+                                javaWildcardType, wildcard.atypeFactory.processingEnv);
+            }
+
+            if (wildcard.isUninferredTypeArgument()) {
+                rawTypeWildcards.put(wildcard.getTypeVariable(), wildcard.getUnderlyingType());
             }
 
             final AnnotatedTypeMirror extendsBound =
-                    AnnotatedTypeMirror.createType(underlyingExtendsBound, typeFactory, false);
+                    AnnotatedTypeMirror.createType(javaExtendsBound, typeFactory, false);
             wildcard.setExtendsBound(extendsBound);
 
             this.wildcards.put(wildcard.getUnderlyingType(), wildcard);
@@ -391,36 +534,81 @@ public class BoundsInitializer {
         }
 
         private void initializeTypeArgs(final AnnotatedDeclaredType declaredType) {
+            final DeclaredType actualType = (DeclaredType) declaredType.actualType;
+            if (actualType.getTypeArguments().isEmpty() && !declaredType.wasRaw()) {
+                return;
+            }
+            final TypeElement typeElement =
+                    (TypeElement) declaredType.atypeFactory.types.asElement(actualType);
+            List<AnnotatedTypeMirror> typeArgs;
             if (declaredType.typeArgs == null) {
-                final DeclaredType actualType = (DeclaredType) declaredType.actualType;
-                final List<AnnotatedTypeMirror> typeArgs = new ArrayList<>();
-                if (!actualType.getTypeArguments().isEmpty()) { // lazy init
-                    final List<? extends TypeMirror> actualTypeArgs = actualType.getTypeArguments();
-                    for (int i = 0; i < actualTypeArgs.size(); i++) {
-                        final AnnotatedTypeMirror annoTypeArg =
-                                AnnotatedTypeMirror.createType(
-                                        actualTypeArgs.get(i), declaredType.atypeFactory, false);
-
-                        final BoundPathNode node = addPathNode(new TypeArgNode(i));
-                        typeArgs.add(replaceOrVisit(annoTypeArg));
-                        removePathNode(node);
+                typeArgs = new ArrayList<>();
+                for (int i = 0; i < typeElement.getTypeParameters().size(); i++) {
+                    TypeMirror javaTypeArg =
+                            getJavaType(declaredType, typeElement.getTypeParameters(), i);
+                    final AnnotatedTypeMirror atmArg =
+                            AnnotatedTypeMirror.createType(
+                                    javaTypeArg, declaredType.atypeFactory, false);
+                    typeArgs.add(atmArg);
+                    if (atmArg.getKind() == TypeKind.WILDCARD && declaredType.wasRaw()) {
+                        ((AnnotatedWildcardType) atmArg).setUninferredTypeArgument();
                     }
                 }
-                declaredType.setTypeArguments(typeArgs);
             } else {
+                typeArgs = declaredType.typeArgs;
+            }
 
-                final List<AnnotatedTypeMirror> typeArgs =
-                        new ArrayList<>(declaredType.getTypeArguments());
-                final List<AnnotatedTypeMirror> typeArgReplacements =
-                        new ArrayList<>(typeArgs.size());
-                for (int i = 0; i < typeArgs.size(); i++) {
-                    final AnnotatedTypeMirror typeArg = typeArgs.get(i);
-                    final BoundPathNode node = addPathNode(new TypeArgNode(i));
-                    typeArgReplacements.add(replaceOrVisit(typeArg));
-                    removePathNode(node);
+            List<AnnotatedTypeMirror> typeArgReplacements = new ArrayList<>(typeArgs.size());
+            for (int i = 0; i < typeArgs.size(); i++) {
+                AnnotatedTypeMirror typeArg = typeArgs.get(i);
+                BoundPathNode node = addPathNode(new TypeArgNode(i));
+                if (typeArg.getKind() == TypeKind.WILDCARD) {
+                    ((AnnotatedWildcardType) typeArg)
+                            .setTypeVariable(typeElement.getTypeParameters().get(i));
                 }
+                typeArgReplacements.add(getOrVisit(typeArg));
+                removePathNode(node);
+            }
 
-                declaredType.setTypeArguments(typeArgReplacements);
+            declaredType.setTypeArguments(typeArgReplacements);
+        }
+
+        /**
+         * Store the wildcards created as type arguments to raw types.
+         *
+         * <p>{@code class Foo<T extends Foo> {}} The upper bound of the wildcard in {@code Foo<?>}
+         * is {@code Foo}. The type argument of {@code Foo} is initialized to {@code ? extends Foo}.
+         * The type argument of {@code Foo} in {@code ? extends Foo} needs to be initialized to the
+         * same type argument as the first {@code Foo} so that
+         * BoundsInitializer.InitializerVisitor#getOrVisit will return the cached
+         * AnnotatedWildcardType.
+         */
+        private final Map<TypeVariable, WildcardType> rawTypeWildcards = new HashMap<>();
+
+        /**
+         * Returns the underlying java type of the {@code i}-th type argument of {@code type}. If
+         * {@code type} is raw, then a new wildcard is created or returned from {@code
+         * rawTypeWildcards}.
+         *
+         * @param type declared type
+         * @param parameters elements of the type parameters
+         * @param i index of the type parameter
+         * @return the underlying java type of the {@code i}-th type argument of {@code type}
+         */
+        private TypeMirror getJavaType(
+                AnnotatedDeclaredType type,
+                List<? extends TypeParameterElement> parameters,
+                int i) {
+            if (type.wasRaw()) {
+                TypeVariable typeVariable = (TypeVariable) parameters.get(i).asType();
+                if (rawTypeWildcards.containsKey(typeVariable)) {
+                    return rawTypeWildcards.get(typeVariable);
+                }
+                WildcardType wildcard = getUpperBoundAsWildcard(typeVariable, type.atypeFactory);
+                rawTypeWildcards.put(typeVariable, wildcard);
+                return wildcard;
+            } else {
+                return type.getUnderlyingType().getTypeArguments().get(i);
             }
         }
 
@@ -534,7 +722,7 @@ public class BoundsInitializer {
          */
         @SuppressWarnings("serial")
         private static class ReferenceMap extends LinkedHashMap<BoundPath, AnnotatedTypeVariable> {
-            //TODO: EXPLAINED LINK DUE TO TYPEVAR SLED
+            // TODO: EXPLAINED LINK DUE TO TYPEVAR SLED
         }
 
         public void resolveTypeVarReferences(final AnnotatedTypeMirror boundedType) {
@@ -592,9 +780,10 @@ public class BoundsInitializer {
         }
 
         public AnnotatedTypeMirror traverseToParent(
-                final AnnotatedTypeMirror start, final List<BoundPathNode> path) {
+                final AnnotatedTypeMirror start, final BoundPath path) {
             AnnotatedTypeMirror current = start;
             for (int i = 0; i < path.size() - 1; i++) {
+                // Note that the last element in path isn't inspected.
                 current = path.get(i).next(current);
             }
 
@@ -702,8 +891,8 @@ public class BoundsInitializer {
         }
     }
 
-    /** An array list of BoundPathNodes whose equals method is a referential equality check */
-    @SuppressWarnings("serial")
+    /** A linked list of BoundPathNodes whose equals method is a referential equality check */
+    @SuppressWarnings({"serial", "JdkObsolete"})
     private static class BoundPath extends LinkedList<BoundPathNode> {
 
         @Override
@@ -880,7 +1069,7 @@ public class BoundsInitializer {
             if (parentAtv.getLowerBoundField() != null) {
                 return parentAtv.getLowerBoundField();
             }
-            //else //TODO: I think this should never happen at this point, throw exception
+            // else //TODO: I think this should never happen at this point, throw exception
             return createAndSetLowerBound((AnnotatedTypeVariable) parent);
         }
 

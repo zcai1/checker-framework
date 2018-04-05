@@ -1,9 +1,5 @@
 package org.checkerframework.checker.formatter;
 
-/*>>>
-import org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey;
-*/
-
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.Tree;
@@ -24,6 +20,7 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.SimpleElementVisitor7;
 import javax.lang.model.util.SimpleTypeVisitor7;
+import org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey;
 import org.checkerframework.checker.formatter.qual.ConversionCategory;
 import org.checkerframework.checker.formatter.qual.Format;
 import org.checkerframework.checker.formatter.qual.FormatMethod;
@@ -36,15 +33,13 @@ import org.checkerframework.dataflow.cfg.node.MethodInvocationNode;
 import org.checkerframework.dataflow.cfg.node.Node;
 import org.checkerframework.framework.type.AnnotatedTypeFactory;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
-import org.checkerframework.framework.util.AnnotationBuilder;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.TreeUtils;
 
 /**
  * This class provides a collection of utilities to ease working with syntax trees that have
  * something to do with Formatters.
- *
- * @author Konstantin Weitz
  */
 public class FormatterTreeUtil {
     public final BaseTypeChecker checker;
@@ -108,20 +103,16 @@ public class FormatterTreeUtil {
         NULLARRAY;
     }
 
-    public interface Result<E> {
-        E value();
-    }
-
-    private static class ResultImpl<E> implements Result<E> {
+    /** A wrapper around a value of type E, plus an ExpressionTree location. */
+    public static class Result<E> {
         private final E value;
         public final ExpressionTree location;
 
-        public ResultImpl(E value, ExpressionTree location) {
+        public Result(E value, ExpressionTree location) {
             this.value = value;
             this.location = location;
         }
 
-        @Override
         public E value() {
             return value;
         }
@@ -158,21 +149,28 @@ public class FormatterTreeUtil {
 
     public Result<ConversionCategory[]> asFormatCallCategories(MethodInvocationNode node) {
         // TODO make sure the method signature looks good
-        return new ResultImpl<ConversionCategory[]>(
+        return new Result<ConversionCategory[]>(
                 asFormatCallCategoriesLowLevel(node), node.getTree());
     }
 
+    /** Returns true if {@code node} is a call to a method annotated with {@code @FormatMethod}. */
     public boolean isFormatCall(MethodInvocationTree node, AnnotatedTypeFactory atypeFactory) {
         ExecutableElement method = TreeUtils.elementFromUse(node);
         AnnotationMirror anno = atypeFactory.getDeclAnnotation(method, FormatMethod.class);
         return anno != null;
     }
 
+    /** Returns true if the given ExpressionTree has type java.util.Locale. */
+    public static boolean isLocale(ExpressionTree e, AnnotatedTypeFactory atypeFactory) {
+        return (typeMirrorToClass(atypeFactory.getAnnotatedType(e).getUnderlyingType())
+                == Locale.class);
+    }
+
     /** Represents a format method invocation in the syntax tree. */
     public class FormatCall {
         private final AnnotatedTypeMirror formatAnno;
         private final List<? extends ExpressionTree> args;
-        private final MethodInvocationTree node;
+        final MethodInvocationTree node;
         private final ExpressionTree formatArg;
         private final AnnotatedTypeFactory atypeFactory;
 
@@ -182,34 +180,33 @@ public class FormatterTreeUtil {
             // objects such as atypeFactory, processingEnv, ... nicer
             this.atypeFactory = atypeFactory;
             List<? extends ExpressionTree> theargs;
-            theargs = node.getArguments();
 
-            if (typeMirrorToClass(atypeFactory.getAnnotatedType(theargs.get(0)).getUnderlyingType())
-                    == Locale.class) {
+            theargs = node.getArguments();
+            if (isLocale(theargs.get(0), atypeFactory)) {
                 // call with Locale as first argument
                 theargs = theargs.subList(1, theargs.size());
             }
 
-            // TODO check that the first parameter exists and is a string
+            // TODO Check that the first parameter exists and is a string.
             formatArg = theargs.get(0);
             formatAnno = atypeFactory.getAnnotatedType(formatArg);
             this.args = theargs.subList(1, theargs.size());
         }
 
         /**
-         * Returns an error description if the format string cannot be satisfied. Returns null if
-         * the format string does not contain syntactic errors.
+         * Returns null if the format-string argument's type is annotated as {@code @Format}.
+         * Returns an error description if not annotated as {@code @Format}.
          */
-        public final Result<String> isIllegalFormat() {
-            String res = null;
+        public final Result<String> hasFormatAnnotation() {
             if (!formatAnno.hasAnnotation(Format.class)) {
-                res = "(is a @Format annotation missing?)";
+                String msg = "(is a @Format annotation missing?)";
                 AnnotationMirror inv = formatAnno.getAnnotation(InvalidFormat.class);
                 if (inv != null) {
-                    res = invalidFormatAnnotationToErrorMessage(inv);
+                    msg = invalidFormatAnnotationToErrorMessage(inv);
                 }
+                return new Result<String>(msg, formatArg);
             }
-            return new ResultImpl<String>(res, formatArg);
+            return null;
         }
 
         /**
@@ -236,7 +233,8 @@ public class FormatterTreeUtil {
 
                                     @Override
                                     public InvocationType visitArray(ArrayType t, Class<Void> p) {
-                                        // it's an array, now figure out if it's a (Object[])null array
+                                        // it's an array, now figure out if it's a (Object[])null
+                                        // array
                                         return first.accept(
                                                 new SimpleTreeVisitor<
                                                         InvocationType, Class<Void>>() {
@@ -277,7 +275,7 @@ public class FormatterTreeUtil {
             if (type != InvocationType.VARARG && args.size() > 0) {
                 loc = args.get(0);
             }
-            return new ResultImpl<InvocationType>(type, loc);
+            return new Result<InvocationType>(type, loc);
         }
 
         /**
@@ -296,13 +294,13 @@ public class FormatterTreeUtil {
          * #isParameterNull(TypeMirror) isParameterNull} to work with the result.
          */
         public final Result<TypeMirror>[] getParamTypes() {
-            // One to make javac happy, the other to make Eclipse happy...
+            // One to suppress warning in javac, the other to suppress warning in Eclipse...
             @SuppressWarnings({"rawtypes", "unchecked"})
             Result<TypeMirror>[] res = new Result[args.size()];
             for (int i = 0; i < res.length; ++i) {
                 ExpressionTree arg = args.get(i);
                 TypeMirror argType = atypeFactory.getAnnotatedType(arg).getUnderlyingType();
-                res[i] = new ResultImpl<TypeMirror>(argType, arg);
+                res[i] = new Result<TypeMirror>(argType, arg);
             }
             return res;
         }
@@ -350,19 +348,15 @@ public class FormatterTreeUtil {
     }
 
     /** Reports an error. Takes a {@link Result} to report the location. */
-    public final <E> void failure(
-            Result<E> res, /*@CompilerMessageKey*/ String msg, Object... args) {
-        ResultImpl<E> impl = (ResultImpl<E>) res;
+    public final <E> void failure(Result<E> res, @CompilerMessageKey String msg, Object... args) {
         checker.report(
-                org.checkerframework.framework.source.Result.failure(msg, args), impl.location);
+                org.checkerframework.framework.source.Result.failure(msg, args), res.location);
     }
 
     /** Reports an warning. Takes a {@link Result} to report the location. */
-    public final <E> void warning(
-            Result<E> res, /*@CompilerMessageKey*/ String msg, Object... args) {
-        ResultImpl<E> impl = (ResultImpl<E>) res;
+    public final <E> void warning(Result<E> res, @CompilerMessageKey String msg, Object... args) {
         checker.report(
-                org.checkerframework.framework.source.Result.warning(msg, args), impl.location);
+                org.checkerframework.framework.source.Result.warning(msg, args), res.location);
     }
 
     /**
@@ -416,7 +410,7 @@ public class FormatterTreeUtil {
         return list.toArray(new ConversionCategory[] {});
     }
 
-    private final Class<? extends Object> typeMirrorToClass(final TypeMirror type) {
+    private static final Class<? extends Object> typeMirrorToClass(final TypeMirror type) {
         return type.accept(
                 new SimpleTypeVisitor7<Class<? extends Object>, Class<Void>>() {
                     @Override
@@ -456,7 +450,8 @@ public class FormatterTreeUtil {
                                                     return Class.forName(
                                                             e.getQualifiedName().toString());
                                                 } catch (ClassNotFoundException e1) {
-                                                    return null; // the lookup should work for all the classes we care about
+                                                    return null; // the lookup should work for all
+                                                    // the classes we care about
                                                 }
                                             }
                                         },

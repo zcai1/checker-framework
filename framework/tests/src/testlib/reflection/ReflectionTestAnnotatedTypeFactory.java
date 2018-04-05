@@ -10,27 +10,25 @@ import org.checkerframework.framework.type.treeannotator.PropagationTreeAnnotato
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
 import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
-import org.checkerframework.javacutil.AnnotationUtils;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import testlib.reflection.qual.ReflectBottom;
 
 /**
  * AnnotatedTypeFactory with reflection resolution enabled. The used qualifier hierarchy is
  * straightforward and only intended for test purposes.
- *
- * @author rjust, smillst
  */
 public final class ReflectionTestAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     public ReflectionTestAnnotatedTypeFactory(BaseTypeChecker checker) {
         super(checker);
         postInit();
-        AnnotationMirror bottom = AnnotationUtils.fromClass(elements, ReflectBottom.class);
+        AnnotationMirror bottom = AnnotationBuilder.fromClass(elements, ReflectBottom.class);
         addTypeNameImplicit(java.lang.Void.class, bottom);
     }
 
     @Override
     public TreeAnnotator createTreeAnnotator() {
         ImplicitsTreeAnnotator implicitsTreeAnnotator = new ImplicitsTreeAnnotator(this);
-        AnnotationMirror bottom = AnnotationUtils.fromClass(elements, ReflectBottom.class);
+        AnnotationMirror bottom = AnnotationBuilder.fromClass(elements, ReflectBottom.class);
         implicitsTreeAnnotator.addTreeKind(com.sun.source.tree.Tree.Kind.NULL_LITERAL, bottom);
         implicitsTreeAnnotator.addTreeKind(com.sun.source.tree.Tree.Kind.INT_LITERAL, bottom);
 
@@ -39,7 +37,7 @@ public final class ReflectionTestAnnotatedTypeFactory extends BaseAnnotatedTypeF
 
     @Override
     public QualifierHierarchy createQualifierHierarchy(MultiGraphFactory factory) {
-        AnnotationMirror bottom = AnnotationUtils.fromClass(elements, ReflectBottom.class);
+        AnnotationMirror bottom = AnnotationBuilder.fromClass(elements, ReflectBottom.class);
         return new GraphQualifierHierarchy(factory, bottom);
     }
 }

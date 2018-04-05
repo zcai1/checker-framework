@@ -8,6 +8,7 @@ import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.LambdaExpressionTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
+import com.sun.source.tree.UnaryTree;
 import com.sun.source.tree.VariableTree;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,7 +45,6 @@ import org.checkerframework.javacutil.Pair;
  * An implementation of an iterative algorithm to solve a org.checkerframework.dataflow problem,
  * given a control flow graph and a transfer function.
  *
- * @author Stefan Heule
  * @param <A> the abstract value type to be tracked by the analysis
  * @param <S> the store type used in the analysis
  * @param <T> the transfer function type that is used to approximated runtime behavior
@@ -202,7 +202,7 @@ public class Analysis<
                             currentInput = new TransferInput<>(n, this, transferResult);
                             lastNode = n;
                         }
-                        // loop will run at least one, making transferResult non-null
+                        // loop will run at least once, making transferResult non-null
 
                         // propagate store to successors
                         Block succ = rb.getSuccessor();
@@ -703,16 +703,28 @@ public class Analysis<
         if (t == currentTree) {
             return null;
         }
-        Node nodeCorrespondingToTree = getNodeForTree(t);
-        if (nodeCorrespondingToTree == null || nodeCorrespondingToTree.isLValue()) {
+        Set<Node> nodesCorrespondingToTree = getNodesForTree(t);
+        if (nodesCorrespondingToTree == null) {
             return null;
         }
-        return getValue(nodeCorrespondingToTree);
+        A merged = null;
+        for (Node aNode : nodesCorrespondingToTree) {
+            if (aNode.isLValue()) {
+                return null;
+            }
+            A a = getValue(aNode);
+            if (merged == null) {
+                merged = a;
+            } else if (a != null) {
+                merged = merged.leastUpperBound(a);
+            }
+        }
+        return merged;
     }
 
-    /** Get the {@link Node} for a given {@link Tree}. */
-    public Node getNodeForTree(Tree t) {
-        return cfg.getNodeCorrespondingToTree(t);
+    /** Get the set of {@link Node}s for a given {@link Tree}. */
+    public Set<Node> getNodesForTree(Tree t) {
+        return cfg.getNodesCorrespondingToTree(t);
     }
 
     /**
@@ -742,8 +754,11 @@ public class Analysis<
 
     public AnalysisResult<A, S> getResult() {
         assert !isRunning;
-        IdentityHashMap<Tree, Node> treeLookup = cfg.getTreeLookup();
-        return new AnalysisResult<>(nodeValues, inputs, treeLookup, finalLocalValues);
+        IdentityHashMap<Tree, Set<Node>> treeLookup = cfg.getTreeLookup();
+        IdentityHashMap<UnaryTree, AssignmentNode> unaryAssignNodeLookup =
+                cfg.getUnaryAssignNodeLookup();
+        return new AnalysisResult<>(
+                nodeValues, inputs, treeLookup, unaryAssignNodeLookup, finalLocalValues);
     }
 
     /**

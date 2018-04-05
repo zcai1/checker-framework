@@ -1,10 +1,5 @@
 package org.checkerframework.framework.util.element;
 
-import static org.checkerframework.framework.util.element.ElementAnnotationUtil.addAnnotationsFromElement;
-import static org.checkerframework.framework.util.element.ElementAnnotationUtil.annotateViaTypeAnnoPosition;
-import static org.checkerframework.framework.util.element.ElementAnnotationUtil.contains;
-import static org.checkerframework.framework.util.element.ElementAnnotationUtil.getTypeAtLocation;
-
 import com.sun.tools.javac.code.Attribute;
 import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
@@ -49,7 +44,7 @@ public class TypeVarUseApplier {
      */
     public static boolean accepts(AnnotatedTypeMirror type, Element element) {
         return (type instanceof AnnotatedTypeVariable || isGenericArrayType(type))
-                && contains(element.getKind(), acceptedKinds);
+                && ElementAnnotationUtil.contains(element.getKind(), acceptedKinds);
     }
 
     private static boolean isGenericArrayType(AnnotatedTypeMirror type) {
@@ -114,7 +109,8 @@ public class TypeVarUseApplier {
      * explicit annotations written on the type variable
      */
     public void extractAndApply() {
-        addAnnotationsFromElement(typeVariable, useElem.getAnnotationMirrors());
+        ElementAnnotationUtil.addAnnotationsFromElement(
+                typeVariable, useElem.getAnnotationMirrors());
 
         // apply declaration annotations
         ElementAnnotationApplier.apply(typeVariable, declarationElem, typeFactory);
@@ -126,7 +122,7 @@ public class TypeVarUseApplier {
             // if the outer-most type is an array type then we want to ensure the outer annotations
             // are not applied as the type variables primary annotation
             typeVarAnnotations = removeComponentAnnotations(arrayType, annotations);
-            annotateViaTypeAnnoPosition(arrayType, annotations);
+            ElementAnnotationUtil.annotateViaTypeAnnoPosition(arrayType, annotations);
 
         } else {
             typeVarAnnotations = annotations;
@@ -143,8 +139,8 @@ public class TypeVarUseApplier {
                 upperBounds = Arrays.asList(typeVariable.getUpperBound());
             }
 
-            //TODO: Should we just make primary annotations on annotated intersection types apply to all of
-            //TODO: them?  Que dealio?  What should we do?
+            // TODO: Should we just make primary annotations on annotated intersection types apply
+            // TODO: to all of them?  Que dealio?  What should we do?
             for (final AnnotatedTypeMirror bound : upperBounds) {
                 bound.removeAnnotationInHierarchy(annotation);
                 bound.addAnnotation(annotation);
@@ -175,7 +171,7 @@ public class TypeVarUseApplier {
 
     private boolean isBaseComponent(
             final AnnotatedArrayType arrayType, final Attribute.TypeCompound anno) {
-        return getTypeAtLocation(arrayType, anno.getPosition().location)
+        return ElementAnnotationUtil.getTypeAtLocation(arrayType, anno.getPosition().location)
                 .getClass()
                 .equals(AnnotatedTypeVariable.class);
     }
@@ -263,12 +259,21 @@ public class TypeVarUseApplier {
                             + enclosingElement);
         }
 
-        final MethodSymbol enclosingMethod = (MethodSymbol) paramElem.getEnclosingElement();
-
-        final List<Attribute.TypeCompound> annotations = enclosingMethod.getRawTypeAttributes();
-        final int paramIndex = enclosingMethod.getParameters().indexOf(paramElem);
+        final MethodSymbol enclosingMethod = (MethodSymbol) enclosingElement;
 
         final List<Attribute.TypeCompound> result = new ArrayList<Attribute.TypeCompound>();
+        if (enclosingMethod.getKind() != ElementKind.CONSTRUCTOR
+                && enclosingMethod.getKind() != ElementKind.METHOD) {
+            // Initializer blocks don't have parameters, so there is nothing to do.
+            return result;
+        }
+
+        // TODO: for the parameter in a lambda expression, the enclosingMethod isn't
+        // the lambda expression. Does this read the correct annotations?
+
+        final int paramIndex = enclosingMethod.getParameters().indexOf(paramElem);
+        final List<Attribute.TypeCompound> annotations = enclosingMethod.getRawTypeAttributes();
+
         for (final Attribute.TypeCompound typeAnno : annotations) {
             if (typeAnno.position.type == TargetType.METHOD_FORMAL_PARAMETER) {
                 if (typeAnno.position.parameter_index == paramIndex) {

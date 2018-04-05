@@ -4,17 +4,16 @@ import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.CompoundAssignmentTree;
 import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.Tree;
-import java.lang.Byte;
-import java.lang.Integer;
-import java.lang.Long;
-import java.lang.Short;
 import java.lang.annotation.Annotation;
 import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import org.checkerframework.checker.index.IndexUtil;
-import org.checkerframework.checker.signedness.qual.*;
+import org.checkerframework.checker.signedness.qual.Constant;
+import org.checkerframework.checker.signedness.qual.Signed;
+import org.checkerframework.checker.signedness.qual.UnknownSignedness;
+import org.checkerframework.checker.signedness.qual.Unsigned;
 import org.checkerframework.common.basetype.BaseAnnotatedTypeFactory;
 import org.checkerframework.common.basetype.BaseTypeChecker;
 import org.checkerframework.common.value.ValueAnnotatedTypeFactory;
@@ -27,7 +26,7 @@ import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.PropagationTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
 import org.checkerframework.framework.util.defaults.QualifierDefaults;
-import org.checkerframework.javacutil.AnnotationUtils;
+import org.checkerframework.javacutil.AnnotationBuilder;
 
 /** @checker_framework.manual #signedness-checker Signedness Checker */
 public class SignednessAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
@@ -60,10 +59,10 @@ public class SignednessAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
     public SignednessAnnotatedTypeFactory(BaseTypeChecker checker) {
         super(checker);
-        UNKNOWN_SIGNEDNESS = AnnotationUtils.fromClass(elements, UnknownSignedness.class);
-        UNSIGNED = AnnotationUtils.fromClass(elements, Unsigned.class);
-        SIGNED = AnnotationUtils.fromClass(elements, Signed.class);
-        CONSTANT = AnnotationUtils.fromClass(elements, Constant.class);
+        UNKNOWN_SIGNEDNESS = AnnotationBuilder.fromClass(elements, UnknownSignedness.class);
+        UNSIGNED = AnnotationBuilder.fromClass(elements, Unsigned.class);
+        SIGNED = AnnotationBuilder.fromClass(elements, Signed.class);
+        CONSTANT = AnnotationBuilder.fromClass(elements, Constant.class);
 
         postInit();
     }
@@ -182,9 +181,9 @@ public class SignednessAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
             return null;
         }
 
-        // Refines the type of an integer primitive to @Constant if it is within the signed positive range
-        // (i.e. its MSB is zero). Note that boxed primitives are not handled because they are not yet
-        // handled by the Signedness Checker (Issue #797).
+        // Refines the type of an integer primitive to @Constant if it is within the signed positive
+        // range (i.e. its MSB is zero). Note that boxed primitives are not handled because they are
+        // not yet handled by the Signedness Checker (Issue #797).
         @Override
         public Void visitIdentifier(IdentifierTree tree, AnnotatedTypeMirror type) {
             TypeMirror javaType = type.getUnderlyingType();

@@ -20,7 +20,7 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedWildcard
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.visitor.AbstractAtmComboVisitor;
 import org.checkerframework.javacutil.ErrorReporter;
-import org.checkerframework.javacutil.InternalUtils;
+import org.checkerframework.javacutil.TypesUtils;
 
 /**
  * Helper class to compute the least upper bound of two AnnotatedTypeMirrors.
@@ -169,18 +169,7 @@ class AtmLubVisitor extends AbstractAtmComboVisitor<Void, AnnotatedTypeMirror> {
         for (int i = 0; i < type1.getTypeArguments().size(); i++) {
             AnnotatedTypeMirror type1TypeArg = type1.getTypeArguments().get(i);
             AnnotatedTypeMirror type2TypeArg = type2.getTypeArguments().get(i);
-            AnnotatedTypeMirror lubTypeArg;
-            if (castedLub.wasRaw()) {
-                TypeMirror lubTM =
-                        InternalUtils.leastUpperBound(
-                                atypeFactory.getProcessingEnv(),
-                                type1TypeArg.getUnderlyingType(),
-                                type2TypeArg.getUnderlyingType());
-                lubTypeArg = AnnotatedTypeMirror.createType(lubTM, atypeFactory, false);
-                lubTypArgs.add(lubTypeArg);
-            } else {
-                lubTypeArg = castedLub.getTypeArguments().get(i);
-            }
+            AnnotatedTypeMirror lubTypeArg = castedLub.getTypeArguments().get(i);
             lubTypeArgument(type1TypeArg, type2TypeArg, lubTypeArg);
         }
         if (lubTypArgs.size() > 0) {
@@ -198,12 +187,12 @@ class AtmLubVisitor extends AbstractAtmComboVisitor<Void, AnnotatedTypeMirror> {
         final AnnotatedTypeMirror type2AsLub = AnnotatedTypes.asSuper(atypeFactory, type2, lub);
 
         // If the type argument is a wildcard or captured wildcard, then the lub computation is
-        // slightly different.  The primary annotation on the lower bound is the glb of lower
-        // bounds of the type types.  This is because the lub of  Gen<@A ? extends @A Object> and
-        // Gen<@B ? extends @A Object> is Gen<@B ? extends @A Object>.   If visit(type1AsLub, type2AsLub, lub)
+        // slightly different.  The primary annotation on the lower bound is the glb of lower bounds
+        // of the type types.  This is because the lub of Gen<@A ? extends @A Object> and Gen<@B ?
+        // extends @A Object> is Gen<@B ? extends @A Object>.  If visit(type1AsLub, type2AsLub, lub)
         // was called instead of the below code, then the lub would be Gen<@A ? extends @A Object>.
-        // (Note the lub of  Gen<@A ? super @A Object> and Gen<@A ? super @B Object> does not
-        // exist, but Gen<@A ? super @B Object> is returned.)
+        // (Note the lub of Gen<@A ? super @A Object> and Gen<@A ? super @B Object> does not exist,
+        // but Gen<@A ? super @B Object> is returned.)
         if (lub.getKind() == TypeKind.WILDCARD) {
             if (visited(lub)) {
                 return;
@@ -223,7 +212,7 @@ class AtmLubVisitor extends AbstractAtmComboVisitor<Void, AnnotatedTypeMirror> {
                     lubWildcard.getSuperBound(),
                     lubWildcard.getExtendsBound());
         } else if (lub.getKind() == TypeKind.TYPEVAR
-                && InternalUtils.isCaptured((TypeVariable) lub.getUnderlyingType())) {
+                && TypesUtils.isCaptured((TypeVariable) lub.getUnderlyingType())) {
             if (visited(lub)) {
                 return;
             }

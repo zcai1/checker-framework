@@ -47,7 +47,6 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedExecutab
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedPrimitiveType;
 import org.checkerframework.framework.util.QualifierPolymorphism;
 import org.checkerframework.javacutil.AnnotationUtils;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.TreeUtils;
 import org.checkerframework.javacutil.TypesUtils;
 
@@ -55,18 +54,17 @@ import org.checkerframework.javacutil.TypesUtils;
 public class NullnessVisitor
         extends InitializationVisitor<NullnessAnnotatedTypeFactory, NullnessValue, NullnessStore> {
     // Error message keys
-    // private static final /*@CompilerMessageKey*/ String ASSIGNMENT_TYPE_INCOMPATIBLE = "assignment.type.incompatible";
-    private static final /*@CompilerMessageKey*/ String UNBOXING_OF_NULLABLE =
-            "unboxing.of.nullable";
-    private static final /*@CompilerMessageKey*/ String KNOWN_NONNULL = "known.nonnull";
-    private static final /*@CompilerMessageKey*/ String LOCKING_NULLABLE = "locking.nullable";
-    private static final /*@CompilerMessageKey*/ String THROWING_NULLABLE = "throwing.nullable";
-    private static final /*@CompilerMessageKey*/ String ACCESSING_NULLABLE = "accessing.nullable";
-    private static final /*@CompilerMessageKey*/ String CONDITION_NULLABLE = "condition.nullable";
-    private static final /*@CompilerMessageKey*/ String ITERATING_NULLABLE =
-            "iterating.over.nullable";
-    private static final /*@CompilerMessageKey*/ String SWITCHING_NULLABLE = "switching.nullable";
-    private static final /*@CompilerMessageKey*/ String DEREFERENCE_OF_NULLABLE =
+    // private static final @CompilerMessageKey String ASSIGNMENT_TYPE_INCOMPATIBLE =
+    // "assignment.type.incompatible";
+    private static final @CompilerMessageKey String UNBOXING_OF_NULLABLE = "unboxing.of.nullable";
+    private static final @CompilerMessageKey String KNOWN_NONNULL = "known.nonnull";
+    private static final @CompilerMessageKey String LOCKING_NULLABLE = "locking.nullable";
+    private static final @CompilerMessageKey String THROWING_NULLABLE = "throwing.nullable";
+    private static final @CompilerMessageKey String ACCESSING_NULLABLE = "accessing.nullable";
+    private static final @CompilerMessageKey String CONDITION_NULLABLE = "condition.nullable";
+    private static final @CompilerMessageKey String ITERATING_NULLABLE = "iterating.over.nullable";
+    private static final @CompilerMessageKey String SWITCHING_NULLABLE = "switching.nullable";
+    private static final @CompilerMessageKey String DEREFERENCE_OF_NULLABLE =
             "dereference.of.nullable";
 
     // Annotation and type constants
@@ -132,7 +130,7 @@ public class NullnessVisitor
         }
 
         if (tree.getKind() == Tree.Kind.VARIABLE) {
-            Element vs = InternalUtils.symbol(tree);
+            Element vs = TreeUtils.elementFromTree(tree);
             switch (vs.getKind()) {
                 case EXCEPTION_PARAMETER:
                     if (useType.hasAnnotation(NULLABLE)) {
@@ -176,7 +174,7 @@ public class NullnessVisitor
 
     @Override
     protected void commonAssignmentCheck(
-            Tree varTree, ExpressionTree valueExp, /*@CompilerMessageKey*/ String errorKey) {
+            Tree varTree, ExpressionTree valueExp, @CompilerMessageKey String errorKey) {
 
         // allow MonotonicNonNull to be initialized to null at declaration
         if (varTree.getKind() == Tree.Kind.VARIABLE) {
@@ -195,7 +193,7 @@ public class NullnessVisitor
     protected void commonAssignmentCheck(
             AnnotatedTypeMirror varType,
             ExpressionTree valueExp,
-            /*@CompilerMessageKey*/ String errorKey) {
+            @CompilerMessageKey String errorKey) {
         // Use the valueExp as the context because data flow will have a value for that tree.
         // It might not have a value for the var tree.  This is sound because
         // if data flow has determined @PolyNull is @Nullable at the RHS, then
@@ -209,7 +207,7 @@ public class NullnessVisitor
             AnnotatedTypeMirror varType,
             AnnotatedTypeMirror valueType,
             Tree valueTree,
-            /*@CompilerMessageKey*/ String errorKey) {
+            @CompilerMessageKey String errorKey) {
         if (TypesUtils.isPrimitive(varType.getUnderlyingType())
                 && !TypesUtils.isPrimitive(valueType.getUnderlyingType())) {
             boolean succeed = checkForNullability(valueType, valueTree, UNBOXING_OF_NULLABLE);
@@ -342,9 +340,10 @@ public class NullnessVisitor
     public Void visitAssert(AssertTree node, Void p) {
         // See also org.checkerframework.dataflow.cfg.CFGBuilder.CFGTranslationPhaseOne.visitAssert
 
-        // In cases where neither assumeAssertionsAreEnabled nor assumeAssertionsAreDisabled are turned on
-        // and @AssumeAssertions is not used, checkForNullability is still called since the CFGBuilder will have
-        // generated one branch for which asserts are assumed to be enabled.
+        // In cases where neither assumeAssertionsAreEnabled nor assumeAssertionsAreDisabled are
+        // turned on and @AssumeAssertions is not used, checkForNullability is still called since
+        // the CFGBuilder will have generated one branch for which asserts are assumed to be
+        // enabled.
 
         boolean doVisitAssert = true;
 
@@ -448,8 +447,7 @@ public class NullnessVisitor
      * @param errMsg the error message (must be {@link CompilerMessageKey})
      * @return whether or not the check succeeded
      */
-    private boolean checkForNullability(
-            ExpressionTree tree, /*@CompilerMessageKey*/ String errMsg) {
+    private boolean checkForNullability(ExpressionTree tree, @CompilerMessageKey String errMsg) {
         AnnotatedTypeMirror type = atypeFactory.getAnnotatedType(tree);
         return checkForNullability(type, tree, errMsg);
     }
@@ -463,7 +461,7 @@ public class NullnessVisitor
      * @return whether or not the check succeeded
      */
     private boolean checkForNullability(
-            AnnotatedTypeMirror type, Tree tree, /*@CompilerMessageKey*/ String errMsg) {
+            AnnotatedTypeMirror type, Tree tree, @CompilerMessageKey String errMsg) {
         if (!type.hasEffectiveAnnotation(NONNULL)) {
             checker.report(Result.failure(errMsg, tree), tree);
             return false;
@@ -512,13 +510,13 @@ public class NullnessVisitor
 
     /** @return true if the type of the tree is a super of String */
     private final boolean isString(ExpressionTree tree) {
-        TypeMirror type = InternalUtils.typeOf(tree);
+        TypeMirror type = TreeUtils.typeOf(tree);
         return types.isAssignable(stringType, type);
     }
 
     /** @return true if the type of the tree is a primitive */
     private static final boolean isPrimitive(ExpressionTree tree) {
-        return InternalUtils.typeOf(tree).getKind().isPrimitive();
+        return TreeUtils.typeOf(tree).getKind().isPrimitive();
     }
 
     @Override

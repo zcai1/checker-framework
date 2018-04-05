@@ -42,34 +42,33 @@ import org.checkerframework.framework.type.AnnotatedTypeParameterBounds;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
 import org.checkerframework.framework.type.visitor.AnnotatedTypeComparer;
 import org.checkerframework.framework.type.visitor.AnnotatedTypeScanner;
-import org.checkerframework.framework.util.AnnotationBuilder;
 import org.checkerframework.framework.util.FlowExpressionParseUtil;
 import org.checkerframework.framework.util.FlowExpressionParseUtil.FlowExpressionContext;
 import org.checkerframework.framework.util.PluginUtil;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.ElementUtils;
 import org.checkerframework.javacutil.ErrorReporter;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.TreeUtils;
 
 /**
  * A class that helps checkers use qualifiers that are represented by annotations with Java
  * expression strings. This class performs four main functions:
  *
- * <p>1. Standardizes/canonicalizes the expressions in the annotations such that two expression
- * strings that are equivalent are made to be equal. For example, an instance field f may appear in
- * an expression string as "f" or "this.f"; this class standardizes both strings to "this.f".
- *
- * <p>2. Viewpoint-adapts annotations on field or method declarations at field accesses or method
- * invocations.
- *
- * <p>3. Changes invalid expression strings to an error string that includes the reason why the
- * expression is invalid. For example, {@code @KeyFor("m")} would be changed to
- * {@code @KeyFor("[error for expression: m error: m: identifier not found]")} if m is not a valid
- * identifier.
- *
- * <p>4. Checks annotated types for error strings that have been added by this class and issues an
- * error if any are found.
+ * <ol>
+ *   <li>Standardizes/canonicalizes the expressions in the annotations such that two expression
+ *       strings that are equivalent are made to be equal. For example, an instance field f may
+ *       appear in an expression string as "f" or "this.f"; this class standardizes both strings to
+ *       "this.f".
+ *   <li>Viewpoint-adapts annotations on field or method declarations at field accesses or method
+ *       invocations.
+ *   <li>Changes invalid expression strings to an error string that includes the reason why the
+ *       expression is invalid. For example, {@code @KeyFor("m")} would be changed to
+ *       {@code @KeyFor("[error for expression: m error: m: identifier not found]")} if m is not a
+ *       valid identifier.
+ *   <li>Checks annotated types for error strings that have been added by this class and issues an
+ *       error if any are found.
+ * </ol>
  *
  * <p>Steps 3 and 4 are separated so that an error is issued only once per invalid expression string
  * rather than every time the expression string is parsed. (The expression string is parsed multiple
@@ -127,7 +126,7 @@ public class DependentTypesHelper {
     }
 
     /**
-     * Viewpoint adapts the dependent type annotations on the bounds to the use of the type.
+     * Viewpoint-adapts the dependent type annotations on the bounds to the use of the type.
      *
      * @param classDecl class or interface declaration whose type variables should be viewpoint
      *     adapted
@@ -145,7 +144,7 @@ public class DependentTypesHelper {
     }
 
     /**
-     * Viewpoint adapts the dependent type annotations in the methodDeclType based on the
+     * Viewpoint-adapts the dependent type annotations in the methodDeclType based on the
      * methodInvocationTree.
      *
      * @param methodInvocationTree use of the method
@@ -159,7 +158,7 @@ public class DependentTypesHelper {
     }
 
     /**
-     * Viewpoint adapts the dependent type annotations in the constructorType based on the
+     * Viewpoint-adapts the dependent type annotations in the constructorType based on the
      * newClassTree.
      *
      * @param newClassTree invocation of the constructor
@@ -286,7 +285,8 @@ public class DependentTypesHelper {
                             FlowExpressionContext.buildContextForLambda(
                                     lambdaTree, path, factory.getContext());
                     // TODO: test this.
-                    // TODO: use path.getParentPath to prevent a StackOverflowError, see Issue #1027.
+                    // TODO: use path.getParentPath to prevent a StackOverflowError, see Issue
+                    // #1027.
                     standardizeUseLocals(parameterContext, path.getParentPath(), type);
                 }
                 break;
@@ -356,7 +356,7 @@ public class DependentTypesHelper {
         if (enclosingClass == null) {
             return;
         }
-        TypeMirror enclosingType = InternalUtils.typeOf(enclosingClass);
+        TypeMirror enclosingType = TreeUtils.typeOf(enclosingClass);
 
         FlowExpressions.Receiver receiver =
                 FlowExpressions.internalRepOfPseudoReceiver(path, enclosingType);
@@ -389,7 +389,7 @@ public class DependentTypesHelper {
                         return;
                     }
                     ErrorReporter.errorAbort(this.getClass() + ": tree not found");
-                } else if (InternalUtils.typeOf(tree) == null) {
+                } else if (TreeUtils.typeOf(tree) == null) {
                     // org.checkerframework.framework.flow.CFAbstractTransfer.getValueFromFactory()
                     // gets the assignment context for a pseudo assignment of an argument to
                     // a method parameter.
@@ -453,6 +453,62 @@ public class DependentTypesHelper {
         return !annoToElements.isEmpty();
     }
 
+    /**
+     * Standardizes Java expressions in an annotation. If the annotation is not a dependent type
+     * annotation, returns the same annotation unchanged.
+     *
+     * @param context information about any receiver and arguments
+     * @param localScope path to local scope to use
+     * @param anno the annotation to be standardized
+     * @param useLocalScope whether {@code localScope} should be used to resolve identifiers
+     * @return the standardized annotation
+     */
+    public AnnotationMirror standardizeAnnotation(
+            FlowExpressionContext context,
+            TreePath localScope,
+            AnnotationMirror anno,
+            boolean useLocalScope) {
+        if (!isExpressionAnno(anno)) {
+            return anno;
+        }
+        return standardizeDependentTypeAnnotation(context, localScope, anno, useLocalScope);
+    }
+
+    /** Standardizes an annotation. If it is not a dependent type annotation, returns null. */
+    private AnnotationMirror standardizeAnnotationIfDependentType(
+            FlowExpressionContext context,
+            TreePath localScope,
+            AnnotationMirror anno,
+            boolean useLocalScope) {
+        if (!isExpressionAnno(anno)) {
+            return null;
+        }
+        return standardizeDependentTypeAnnotation(context, localScope, anno, useLocalScope);
+    }
+
+    /** Standardizes a dependent type annotation. */
+    private AnnotationMirror standardizeDependentTypeAnnotation(
+            FlowExpressionContext context,
+            TreePath localScope,
+            AnnotationMirror anno,
+            boolean useLocalScope) {
+        AnnotationBuilder builder =
+                new AnnotationBuilder(
+                        factory.getProcessingEnv(), AnnotationUtils.annotationName(anno));
+
+        for (String value : getListOfExpressionElements(anno)) {
+            List<String> expressionStrings =
+                    AnnotationUtils.getElementValueArray(anno, value, String.class, true);
+            List<String> standardizedStrings = new ArrayList<>();
+            for (String expression : expressionStrings) {
+                standardizedStrings.add(
+                        standardizeString(expression, context, localScope, useLocalScope));
+            }
+            builder.setValue(value, standardizedStrings);
+        }
+        return builder.build();
+    }
+
     private class StandardizeTypeAnnotator extends AnnotatedTypeScanner<Void, Void> {
         private final FlowExpressionContext context;
         private final TreePath localScope;
@@ -464,31 +520,6 @@ public class DependentTypesHelper {
             this.context = context;
             this.localScope = localScope;
             this.useLocalScope = useLocalScope;
-        }
-
-        private AnnotationMirror standardizeAnnotation(
-                FlowExpressionContext context,
-                TreePath localScope,
-                AnnotationMirror anno,
-                boolean useLocalScope) {
-            if (!isExpressionAnno(anno)) {
-                return null;
-            }
-            AnnotationBuilder builder =
-                    new AnnotationBuilder(
-                            factory.getProcessingEnv(), AnnotationUtils.annotationName(anno));
-
-            for (String value : getListOfExpressionElements(anno)) {
-                List<String> expressionStrings =
-                        AnnotationUtils.getElementValueArray(anno, value, String.class, true);
-                List<String> standardizedStrings = new ArrayList<>();
-                for (String expression : expressionStrings) {
-                    standardizedStrings.add(
-                            standardizeString(expression, context, localScope, useLocalScope));
-                }
-                builder.setValue(value, standardizedStrings);
-            }
-            return builder.build();
         }
 
         @Override
@@ -517,13 +548,11 @@ public class DependentTypesHelper {
 
         @Override
         protected Void scan(AnnotatedTypeMirror type, Void aVoid) {
-            if (type == null) {
-                return null;
-            }
             List<AnnotationMirror> newAnnos = new ArrayList<>();
             for (AnnotationMirror anno : type.getAnnotations()) {
                 AnnotationMirror annotationMirror =
-                        standardizeAnnotation(context, localScope, anno, useLocalScope);
+                        standardizeAnnotationIfDependentType(
+                                context, localScope, anno, useLocalScope);
                 if (annotationMirror != null) {
                     newAnnos.add(annotationMirror);
                 }
@@ -581,6 +610,44 @@ public class DependentTypesHelper {
     }
 
     /**
+     * Checks every Java expression element of the annotation to see if the expression is an error
+     * string as specified by DependentTypesError#isExpressionError. If any expression is an error,
+     * then a non-empty list of {@link DependentTypesError} is returned.
+     */
+    private List<DependentTypesError> checkForError(AnnotationMirror am) {
+        List<DependentTypesError> errors = new ArrayList<>();
+
+        for (String element : getListOfExpressionElements(am)) {
+            List<String> value =
+                    AnnotationUtils.getElementValueArray(am, element, String.class, true);
+            for (String v : value) {
+                if (DependentTypesError.isExpressionError(v)) {
+                    errors.add(new DependentTypesError(v));
+                }
+            }
+        }
+        return errors;
+    }
+
+    /**
+     * Checks every Java expression element of the annotation to see if the expression is an error
+     * string as specified by DependentTypesError#isExpressionError. If any expression is an error,
+     * then an error is reported at {@code errorTree}.
+     *
+     * @param annotation annotation to check
+     * @param errorTree location at which to issue errors
+     */
+    public void checkAnnotation(AnnotationMirror annotation, Tree errorTree) {
+        List<DependentTypesError> errors = checkForError(annotation);
+        if (errors.isEmpty()) {
+            return;
+        }
+        SourceChecker checker = factory.getContext().getChecker();
+        String error = PluginUtil.join("\n", errors);
+        checker.report(Result.failure("flowexpr.parse.error", error), errorTree);
+    }
+
+    /**
      * Checks all expressions in the method declaration AnnotatedTypeMirror to see if the expression
      * string is an error string as specified by DependentTypesError#isExpressionError. If the
      * annotated type has any errors, a flowexpr.parse.error is issued.
@@ -634,9 +701,6 @@ public class DependentTypesHelper {
 
         @Override
         protected List<DependentTypesError> scan(AnnotatedTypeMirror type, Void aVoid) {
-            if (type == null) {
-                return super.scan(type, aVoid);
-            }
             List<DependentTypesError> errors = new ArrayList<>();
             for (AnnotationMirror am : type.getAnnotations()) {
                 if (isExpressionAnno(am)) {
@@ -663,26 +727,6 @@ public class DependentTypesHelper {
             } else {
                 return null;
             }
-        }
-
-        /**
-         * Checks every Java expression element of the annotation to see if the expression is an
-         * error string as specified by DependentTypesError#isExpressionError. If any expression is
-         * an error, then a non-empty list of {@link DependentTypesError} is returned.
-         */
-        private List<DependentTypesError> checkForError(AnnotationMirror am) {
-            List<DependentTypesError> errors = new ArrayList<>();
-
-            for (String element : getListOfExpressionElements(am)) {
-                List<String> value =
-                        AnnotationUtils.getElementValueArray(am, element, String.class, true);
-                for (String v : value) {
-                    if (DependentTypesError.isExpressionError(v)) {
-                        errors.add(new DependentTypesError(v));
-                    }
-                }
-            }
-            return errors;
         }
     }
 
@@ -753,9 +797,6 @@ public class DependentTypesHelper {
     private class ContainsDependentType extends AnnotatedTypeScanner<Boolean, Void> {
         @Override
         protected Boolean scan(AnnotatedTypeMirror type, Void aVoid) {
-            if (type == null) {
-                return false;
-            }
             for (AnnotationMirror am : type.getAnnotations()) {
                 if (isExpressionAnno(am)) {
                     return true;

@@ -2,7 +2,10 @@
 
 package org.checkerframework.checker.regex;
 
+// Uses annotations in comments because it may be run on a Java 7 JVM
+// when called from user code.
 /*>>>
+import org.checkerframework.checker.lock.qual.*;
 import org.checkerframework.checker.nullness.qual.*;
 import org.checkerframework.checker.regex.qual.*;
 import org.checkerframework.dataflow.qual.*;
@@ -121,7 +124,7 @@ public final class RegexUtil {
          */
         @Override
         /*@Pure*/
-        public String getMessage() {
+        public String getMessage(/*>>>@GuardSatisfied CheckedPatternSyntaxException this*/) {
             return pse.getMessage();
         }
 

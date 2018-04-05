@@ -10,6 +10,9 @@ import java.util.List;
  * <p>These correspond to the *_LITERAL constants in {@link com.sun.source.tree.Tree.Kind}. However,
  * that enum is in the tools.jar which is not on the user's classpath by default. So this enum is
  * used instead.
+ *
+ * @checker_framework.manual #creating-declarative-type-introduction Declaratively specifying
+ *     implicit annotations
  */
 // https://docs.oracle.com/javase/8/docs/technotes/tools/findingclasses.html#bootclass
 public enum LiteralKind {
@@ -37,7 +40,8 @@ public enum LiteralKind {
     PRIMITIVE;
 
     /**
-     * Returns all LiteralKinds except for ALL and PRIMITIVE
+     * Returns all LiteralKinds except for ALL and PRIMITIVE (which are shorthands for groups of
+     * other LiteralKinds).
      *
      * @return list of LiteralKinds except for ALL and PRIMITIVE
      */
@@ -49,9 +53,11 @@ public enum LiteralKind {
     }
 
     /**
-     * Returns the primitive {@code LiteralKind}s: INT, LONG, FLOAT, DOUBLE, BOOLEAN, CHAR
+     * Returns the primitive {@code LiteralKind}s: INT, LONG, FLOAT, DOUBLE, BOOLEAN, CHAR. This is
+     * all LiteralKinds except for NULL, STRING, and ones that are shorthands for groups of other
+     * LiteralKinds.
      *
-     * @return list of LiteralKinds except for ALL
+     * @return list of LiteralKinds except for NULL and STRING
      */
     public static List<LiteralKind> primitiveLiteralKinds() {
         return new ArrayList<>(Arrays.asList(INT, LONG, FLOAT, DOUBLE, BOOLEAN, CHAR));

@@ -5,8 +5,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 */
 
 import com.sun.source.tree.Tree;
+import java.util.ArrayDeque;
 import java.util.Collection;
-import java.util.LinkedList;
 import javax.lang.model.type.TypeMirror;
 import org.checkerframework.dataflow.cfg.CFGBuilder;
 import org.checkerframework.dataflow.cfg.block.Block;
@@ -28,7 +28,11 @@ import org.checkerframework.dataflow.cfg.block.Block;
  * tree != null &rArr; node.getType() == InternalUtils.typeOf(node.getTree())
  * </pre>
  *
- * @author Stefan Heule
+ * Note that two {@code Node}s can be {@code .equals} but represent different CFG nodes. Take care
+ * to use reference equality, maps that handle identity {@code IdentityHashMap}, and sets like
+ * {@code IdentityMostlySingleton}.
+ *
+ * @see org.checkerframework.dataflow.util.IdentityMostlySingleton
  */
 public abstract class Node {
 
@@ -132,8 +136,8 @@ public abstract class Node {
      *     well as (transitively) the operands of its operands
      */
     public Collection<Node> getTransitiveOperands() {
-        LinkedList<Node> operands = new LinkedList<>(getOperands());
-        LinkedList<Node> transitiveOperands = new LinkedList<>();
+        ArrayDeque<Node> operands = new ArrayDeque<>(getOperands());
+        ArrayDeque<Node> transitiveOperands = new ArrayDeque<>(operands.size());
         while (!operands.isEmpty()) {
             Node next = operands.removeFirst();
             operands.addAll(next.getOperands());

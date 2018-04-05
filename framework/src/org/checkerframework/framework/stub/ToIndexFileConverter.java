@@ -1,25 +1,13 @@
 package org.checkerframework.framework.stub;
 
-import annotations.Annotation;
-import annotations.el.AClass;
-import annotations.el.ADeclaration;
-import annotations.el.AElement;
-import annotations.el.AField;
-import annotations.el.AMethod;
-import annotations.el.AScene;
-import annotations.el.ATypeElement;
-import annotations.el.AnnotationDef;
-import annotations.el.BoundLocation;
-import annotations.el.DefException;
-import annotations.el.InnerTypeLocation;
-import annotations.el.LocalLocation;
-import annotations.field.AnnotationFieldType;
-import annotations.io.IndexFileParser;
-import annotations.io.IndexFileWriter;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseException;
 import com.github.javaparser.ParseProblemException;
-import com.github.javaparser.ast.*;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.PackageDeclaration;
+import com.github.javaparser.ast.StubUnit;
 import com.github.javaparser.ast.body.AnnotationDeclaration;
 import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -30,6 +18,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.InitializerDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.body.ReceiverParameter;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -37,7 +26,14 @@ import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.type.*;
+import com.github.javaparser.ast.type.ArrayType;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.type.ReferenceType;
+import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.type.TypeParameter;
+import com.github.javaparser.ast.type.VoidType;
+import com.github.javaparser.ast.type.WildcardType;
 import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.sun.tools.javac.code.TypeAnnotationPosition.TypePathEntry;
 import java.io.BufferedWriter;
@@ -51,10 +47,26 @@ import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.checkerframework.framework.util.PluginUtil;
 import org.checkerframework.javacutil.ErrorReporter;
+import scenelib.annotations.Annotation;
+import scenelib.annotations.el.AClass;
+import scenelib.annotations.el.ADeclaration;
+import scenelib.annotations.el.AElement;
+import scenelib.annotations.el.AField;
+import scenelib.annotations.el.AMethod;
+import scenelib.annotations.el.AScene;
+import scenelib.annotations.el.ATypeElement;
+import scenelib.annotations.el.AnnotationDef;
+import scenelib.annotations.el.BoundLocation;
+import scenelib.annotations.el.DefException;
+import scenelib.annotations.el.InnerTypeLocation;
+import scenelib.annotations.el.LocalLocation;
+import scenelib.annotations.io.IndexFileParser;
+import scenelib.annotations.io.IndexFileWriter;
 
 /**
  * Convert a JAIF file plus a stub file into index files (JAIFs). Note that the resulting index
@@ -63,8 +75,6 @@ import org.checkerframework.javacutil.ErrorReporter;
  *
  * <p>An instance of the class represents conversion of 1 stub file, but the static {@link
  * #main(String[])} method converts multiple stub files, instantiating the class multiple times.
- *
- * @author dbro
  */
 public class ToIndexFileConverter extends GenericVisitorAdapter<Void, AElement> {
     // The possessive modifiers "*+" are for efficiency only.
@@ -220,8 +230,8 @@ public class ToIndexFileConverter extends GenericVisitorAdapter<Void, AElement> 
             return null;
         }
         AnnotationDef def = new AnnotationDef(exprName);
-        def.setFieldTypes(Collections.<String, AnnotationFieldType>emptyMap());
-        return new Annotation(def, Collections.<String, Object>emptyMap());
+        def.setFieldTypes(Collections.emptyMap());
+        return new Annotation(def, Collections.emptyMap());
     }
 
     @Override
@@ -232,7 +242,7 @@ public class ToIndexFileConverter extends GenericVisitorAdapter<Void, AElement> 
     @Override
     public Void visit(BlockStmt stmt, AElement elem) {
         return null;
-        //super.visit(stmt, elem);
+        // super.visit(stmt, elem);
     }
 
     @Override
@@ -275,7 +285,7 @@ public class ToIndexFileConverter extends GenericVisitorAdapter<Void, AElement> 
             }
         }
         return body == null ? null : body.accept(this, method);
-        //return super.visit(decl, elem);
+        // return super.visit(decl, elem);
     }
 
     @Override
@@ -315,7 +325,7 @@ public class ToIndexFileConverter extends GenericVisitorAdapter<Void, AElement> 
         Type type = decl.getType();
         List<Parameter> params = decl.getParameters();
         List<TypeParameter> typeParams = decl.getTypeParameters();
-        List<AnnotationExpr> rcvrAnnos = decl.getReceiverAnnotations();
+        Optional<ReceiverParameter> rcvrParam = decl.getReceiverParameter();
         BlockStmt body = decl.getBody().orElse(null);
         StringBuilder sb = new StringBuilder(decl.getNameAsString()).append('(');
         AClass clazz = (AClass) elem;
@@ -337,8 +347,8 @@ public class ToIndexFileConverter extends GenericVisitorAdapter<Void, AElement> 
                 visitType(param.getType(), field.type);
             }
         }
-        if (rcvrAnnos != null) {
-            for (AnnotationExpr expr : rcvrAnnos) {
+        if (rcvrParam.isPresent()) {
+            for (AnnotationExpr expr : rcvrParam.get().getAnnotations()) {
                 Annotation anno = extractAnnotation(expr);
                 method.receiver.type.tlAnnotationsHere.add(anno);
             }
@@ -457,16 +467,20 @@ public class ToIndexFileConverter extends GenericVisitorAdapter<Void, AElement> 
                     }
 
                     @Override
-                    public Void visit(ReferenceType type, InnerTypeLocation loc) {
+                    public Void visit(ArrayType type, InnerTypeLocation loc) {
                         InnerTypeLocation ext = loc;
-                        int n = type.getArrayCount();
+                        int n = type.getArrayLevel();
+                        Type currentType = type;
                         for (int i = 0; i < n; i++) {
                             ext = extendedTypePath(ext, 1, 0);
-                            for (AnnotationExpr expr : type.getAnnotationsAtLevel(i)) {
+                            for (AnnotationExpr expr : currentType.getAnnotations()) {
                                 ATypeElement typeElem = elem.innerTypes.vivify(ext);
                                 Annotation anno = extractAnnotation(expr);
                                 typeElem.tlAnnotationsHere.add(anno);
                             }
+                            currentType =
+                                    ((com.github.javaparser.ast.type.ArrayType) currentType)
+                                            .getComponentType();
                         }
                         return null;
                     }
@@ -561,7 +575,7 @@ public class ToIndexFileConverter extends GenericVisitorAdapter<Void, AElement> 
                     }
 
                     @Override
-                    public String visit(ReferenceType type, Void v) {
+                    public String visit(ArrayType type, Void v) {
                         String typeName = type.getElementType().accept(this, null);
                         StringBuilder sb = new StringBuilder();
                         int n = type.getArrayLevel();

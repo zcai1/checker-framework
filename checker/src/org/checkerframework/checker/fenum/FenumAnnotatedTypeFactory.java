@@ -1,7 +1,6 @@
 package org.checkerframework.checker.fenum;
 
 import java.lang.annotation.Annotation;
-import java.util.LinkedHashSet;
 import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
 import org.checkerframework.checker.fenum.qual.Fenum;
@@ -11,10 +10,10 @@ import org.checkerframework.checker.fenum.qual.FenumUnqualified;
 import org.checkerframework.checker.fenum.qual.PolyFenum;
 import org.checkerframework.common.basetype.BaseAnnotatedTypeFactory;
 import org.checkerframework.common.basetype.BaseTypeChecker;
-import org.checkerframework.framework.type.AnnotationClassLoader;
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 
 public class FenumAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
@@ -25,9 +24,9 @@ public class FenumAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     public FenumAnnotatedTypeFactory(BaseTypeChecker checker) {
         super(checker);
 
-        FENUM_BOTTOM = AnnotationUtils.fromClass(elements, FenumBottom.class);
-        FENUM = AnnotationUtils.fromClass(elements, Fenum.class);
-        FENUM_UNQUALIFIED = AnnotationUtils.fromClass(elements, FenumUnqualified.class);
+        FENUM_BOTTOM = AnnotationBuilder.fromClass(elements, FenumBottom.class);
+        FENUM = AnnotationBuilder.fromClass(elements, Fenum.class);
+        FENUM_UNQUALIFIED = AnnotationBuilder.fromClass(elements, FenumUnqualified.class);
 
         this.postInit();
     }
@@ -38,9 +37,14 @@ public class FenumAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
      */
     @Override
     protected Set<Class<? extends Annotation>> createSupportedTypeQualifiers() {
-        AnnotationClassLoader loader = new AnnotationClassLoader(checker);
-
-        Set<Class<? extends Annotation>> qualSet = new LinkedHashSet<Class<? extends Annotation>>();
+        // Load everything in qual directory, and top, bottom, unqualified, and fake enum
+        Set<Class<? extends Annotation>> qualSet =
+                getBundledTypeQualifiersWithPolyAll(
+                        FenumTop.class,
+                        Fenum.class,
+                        FenumUnqualified.class,
+                        FenumBottom.class,
+                        PolyFenum.class);
 
         // Load externally defined quals given in the -Aquals and/or -AqualDirs options
         String qualNames = checker.getOption("quals");
@@ -59,16 +63,6 @@ public class FenumAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                 qualSet.addAll(loader.loadExternalAnnotationClassesFromDirectory(dirName));
             }
         }
-
-        // Load top, bottom, unqualified, and fake enum
-        qualSet.add(FenumTop.class);
-        qualSet.add(Fenum.class);
-        qualSet.add(FenumUnqualified.class);
-        qualSet.add(FenumBottom.class);
-        qualSet.add(PolyFenum.class);
-
-        // Also call super to load everything in qual directory
-        qualSet.addAll(getBundledTypeQualifiersWithPolyAll());
 
         // TODO: warn if no qualifiers given?
         // Just Fenum("..") is still valid, though...

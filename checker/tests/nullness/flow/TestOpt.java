@@ -2,7 +2,6 @@ import org.checkerframework.checker.nullness.Opt;
 import org.checkerframework.checker.nullness.qual.*;
 
 /** Test class org.checkerframework.checker.nullness.Opt. */
-// @below-java8-jdk-skip-test
 class TestOpt {
     void foo1(@Nullable Object p) {
         if (Opt.isPresent(p)) {
@@ -12,7 +11,7 @@ class TestOpt {
 
     void foo1b(@Nullable Object p) {
         if (!Opt.isPresent(p)) {
-            //:: error: (dereference.of.nullable)
+            // :: error: (dereference.of.nullable)
             p.toString();
         }
     }
@@ -34,7 +33,7 @@ class TestOpt {
     }
 
     void foo4b(@Nullable Object p) {
-        //:: error: (argument.type.incompatible)
+        // :: error: (argument.type.incompatible)
         String s = Opt.map(p, null);
     }
 
@@ -43,7 +42,7 @@ class TestOpt {
     }
 
     void foo5b(@Nullable Object p) {
-        //:: error: (argument.type.incompatible)
+        // :: error: (argument.type.incompatible)
         @NonNull Object o = Opt.orElse(p, null);
     }
 
@@ -52,7 +51,7 @@ class TestOpt {
     }
 
     void foo6b(@Nullable Object p) {
-        //:: error: (return.type.incompatible)
+        // :: error: (return.type.incompatible)
         @NonNull Object o = Opt.orElseGet(p, () -> null);
     }
 
@@ -66,7 +65,7 @@ class TestOpt {
 
     void foo7b(@Nullable Object p) {
         try {
-            //:: error: (return.type.incompatible)
+            // :: error: (return.type.incompatible)
             @NonNull Object o = Opt.orElseThrow(p, () -> null);
         } catch (Throwable t) {
             // p was null

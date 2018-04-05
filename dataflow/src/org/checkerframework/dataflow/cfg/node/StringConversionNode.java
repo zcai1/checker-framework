@@ -17,14 +17,11 @@ import org.checkerframework.dataflow.util.HashCodeUtils;
  * because null is converted to the string "null".
  *
  * <p>Conversion of primitive types to Strings requires first boxing and then string conversion.
- *
- * @author Stefan Heule
- * @author Charlie Garrett
  */
 public class StringConversionNode extends Node {
 
-    protected Tree tree;
-    protected Node operand;
+    protected final Tree tree;
+    protected final Node operand;
 
     // TODO: The type of a string conversion should be a final
     // TypeMirror representing java.lang.String. Currently we require

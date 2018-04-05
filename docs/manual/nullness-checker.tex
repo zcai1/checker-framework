@@ -306,9 +306,9 @@ the possibility of returning \<null>.
 
 \subsection{Implicit qualifiers\label{nullness-implicit-qualifiers}}
 
-As described in Section~\ref{effective-qualifier}, the Nullness Checker
+The Nullness Checker
 adds implicit qualifiers, reducing the number of annotations that must
-appear in your code.
+appear in your code (see Section~\ref{effective-qualifier}).
 For example, enum types are implicitly non-null, so you never need to write
 \<@NonNull MyEnumType>.
 
@@ -440,7 +440,7 @@ checker.
 
 To make the Nullness Checker conservatively reject code that may leave a
 non-null value in an array, use the command-line option
-\code{-Alint=forbidnonnullarraycomponents}.  The opiton is currently disabled
+\code{-Alint=forbidnonnullarraycomponents}.  The option is currently disabled
 because it makes the checker issue many false positive errors.
 % TODO: flip the default after collecting more data.
 
@@ -861,7 +861,8 @@ exactly as if you had written the corresponding annotation from the
 Nullness Checker, as described in Figure~\ref{fig-nullness-refactoring}.
 
 
-% These lists should be kept in sync with NullnessAnnotatedTypeFactory.java .
+% These lists should be kept in sync with
+% ../../checker/src/org/checkerframework/checker/nullness/NullnessAnnotatedTypeFactory.java
 \begin{figure}
 \begin{center}
 % The ~ around the text makes things look better in Hevea (and not terrible
@@ -881,6 +882,7 @@ Nullness Checker, as described in Figure~\ref{fig-nullness-refactoring}.
  ~org.jetbrains.annotations.NotNull~ \\ \hline
  ~org.jmlspecs.annotation.NonNull~ \\ \hline
  ~org.netbeans.api.annotations.common.NonNull~ \\ \hline
+ ~org.springframework.lang.NonNull~ \\ \hline
 \end{tabular}
 &
 $\Rightarrow$
@@ -895,6 +897,7 @@ $\Rightarrow$
  ~com.sun.istack.internal.Nullable~ \\ \hline
  ~edu.umd.cs.findbugs.annotations.Nullable~ \\ \hline
  ~edu.umd.cs.findbugs.annotations.CheckForNull~ \\ \hline
+ ~edu.umd.cs.findbugs.annotations.PossiblyNull~ \\ \hline
  ~edu.umd.cs.findbugs.annotations.UnknownNullness~ \\ \hline
  ~javax.annotation.Nullable~ \\ \hline
  ~javax.annotation.CheckForNull~ \\ \hline
@@ -905,6 +908,7 @@ $\Rightarrow$
  ~org.netbeans.api.annotations.common.NullAllowed~ \\ \hline
  ~org.netbeans.api.annotations.common.CheckForNull~ \\ \hline
  ~org.netbeans.api.annotations.common.NullUnknown~ \\ \hline
+ ~org.springframework.lang.Nullable~ \\ \hline
 \end{tabular}
 &
 $\Rightarrow$
@@ -974,6 +978,11 @@ issue.
 
 Different tools are appropriate in different circumstances.  Here is a
 brief comparison with FindBugs, but similar points apply to other tools.
+(For example, the \href{https://github.com/uber/NullAway}{NullAway} and
+\href{http://fbinfer.com/docs/eradicate.html}{Eradicate} tools are more
+like sound type-checking than FindBugs, but all of those tools accept
+unsoundness --- that is, false negatives or missed warnings --- in exchange
+for analysis speed.)
 
 The Checker Framework has a more powerful nullness analysis; FindBugs misses
 some real
@@ -1812,8 +1821,13 @@ consider a doubly linked list:
 
 \subsection{How to handle warnings\label{initialization-warnings}}
 
-There are several ways to address a warning ``error:  the constructor does
-not initialize fields: \ldots''.
+
+\subsubsection{``error:  the constructor does not initialize fields: \ldots''\label{initialization-warnings-constructor}}
+
+Like any warning, ``error:  the constructor does not initialize fields:
+\ldots'' indicates that either your annotations are incorrect or your code
+is buggy.  You can fix either the annotations or the code.
+
 \begin{itemize}
 \item
   Declare the field as \refqualclass{checker/nullness/qual}{Nullable}.  Recall
@@ -1838,6 +1852,8 @@ not initialize fields: \ldots''.
   NullPointerException into a more obscure error.
 \end{itemize}
 
+\subsubsection{``call to \ldots\ is not allowed on the given receiver''\label{initialization-warnings-receiver}}
+
 If your code calls an instance method from a constructor, you may see a
 message such as the following:
 
@@ -1855,7 +1871,9 @@ but the receiver formal parameter (Section~\ref{faq-receiver}) of method
 \refqualclass{checker/initialization/qual}{Initialized}.  If
 \<initHelper()> doesn't depend on its receiver being initialized --- that
 is, it's OK to call \<x.initHelper> even if \<x> is not initialized ---
-then you can indicate that:
+then you can indicate that by using
+\refqualclass{checker/initialization/qual}{UnderInitialization} or
+\refqualclass{checker/initialization/qual}{UnknownInitialization}.
 
 \begin{Verbatim}
 class MyClass {
@@ -1876,7 +1894,6 @@ class MyClass {
 You are likely to want to annotate \<initHelper()> with
 \refqualclass{checker/nullness/qual}{EnsuresNonNull} as well; see
 Section~\ref{nullness-method-annotations}.
-
 
 You may get the ``call to \ldots\ is not allowed on the given receiver''
 error even if your constructor has already initialized all the fields.
@@ -1930,6 +1947,15 @@ You can suppress warnings related to partially-initialized objects with
 This can be placed on a single field; on a constructor; or on a class to
 suppress all initialization warnings for all constructors.
 \end{sloppypar}
+
+To disable initialization checking, supply the command-line argument
+\<-AsuppressWarnings=uninitialized>.  Do \emph{not} use
+\<-AsuppressWarnings=initialization>, because doing so will disable all
+nullness checking as well as all initialization checking.  (That is because
+of an implementation detail of the Nullness and Initialization Checkers:
+they are actually the same checker, rather than being two separate checkers
+that are aggregated together.)
+
 
 \paragraph{Checking initialization of all fields, not just \code{@NonNull} ones\label{initialization-checking-all-fields}}
 
@@ -2005,6 +2031,11 @@ a \<@NonNull>
 field may be observed to be null, until that field is set.  In
 particular, the Nullness Checker issues a warning for code like this:
 
+%  import org.checkerframework.checker.initialization.qual.UnknownInitialization;
+%  import org.checkerframework.checker.nullness.qual.NonNull;
+% Declaration of m() needs:
+%   @UnderInitialization(MyClass.class) MyClass this
+% or @UnknownInitialization
 \begin{Verbatim}
   public class MyClass {
     private @NonNull Object f;
@@ -2020,6 +2051,7 @@ particular, the Nullness Checker issues a warning for code like this:
     }
     public MyClass(int x, int y, int z) {
       m();
+      this.f = new Object();
     }
     public void m() {
       // Error because this.f is accessed before f is initialized,
@@ -2464,7 +2496,7 @@ annotation has nothing to do with the raw types of Java Generics.
 % LocalWords:  Nullability typeargs nulltest EnsuresNonNullIf listFiles faq
 % LocalWords:  isDirectory AssertionError intraprocedurally SuppressWarnings rB
 % LocalWords:  FindBugs's getObject RequiresNonNull EnsuresNonNull KeyFor
-% LocalWords:  nonnull EnsuresNonNull arg orElse isPresent bField
+% LocalWords:  nonnull EnsuresNonNull arg orElse isPresent bField qual ccc
 % LocalWords:  keySet getField keyfor param TypeName containsValue indexOf nraA
 % LocalWords:  lastIndexOf deref getProperty getProperties classliteral MyClass
 % LocalWords:  typeofthis nraB nrbB rO nroO nroB containsKey enum
@@ -2475,6 +2507,6 @@ annotation has nothing to do with the raw types of Java Generics.
 % LocalWords:  isEmpty AssumeAssertion cleanroom varargs OtherClass
 % LocalWords:  NullnessRawnessChecker mymap mykey KeyType ValueType
 % LocalWords:  dereferenced dereference Dereferencing initializers
-% LocalWords:  initHelper helperMethod NoSuchElementException
+% LocalWords:  initHelper helperMethod NoSuchElementException classpath
 % LocalWords:  forbidnonnullarraycomponents lombok
 % LocalWords:  NotOnlyInitialized

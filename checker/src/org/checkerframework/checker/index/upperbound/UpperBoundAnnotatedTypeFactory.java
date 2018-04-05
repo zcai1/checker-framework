@@ -3,7 +3,6 @@ package org.checkerframework.checker.index.upperbound;
 import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.CompoundAssignmentTree;
 import com.sun.source.tree.ExpressionTree;
-import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
@@ -20,6 +19,9 @@ import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import org.checkerframework.checker.index.IndexMethodIdentifier;
 import org.checkerframework.checker.index.IndexUtil;
+import org.checkerframework.checker.index.OffsetDependentTypesHelper;
+import org.checkerframework.checker.index.inequality.LessThanAnnotatedTypeFactory;
+import org.checkerframework.checker.index.inequality.LessThanChecker;
 import org.checkerframework.checker.index.lowerbound.LowerBoundAnnotatedTypeFactory;
 import org.checkerframework.checker.index.lowerbound.LowerBoundChecker;
 import org.checkerframework.checker.index.qual.IndexFor;
@@ -30,10 +32,8 @@ import org.checkerframework.checker.index.qual.LTLengthOf;
 import org.checkerframework.checker.index.qual.LTOMLengthOf;
 import org.checkerframework.checker.index.qual.LengthOf;
 import org.checkerframework.checker.index.qual.NegativeIndexFor;
-import org.checkerframework.checker.index.qual.NonNegative;
 import org.checkerframework.checker.index.qual.PolyIndex;
 import org.checkerframework.checker.index.qual.PolyUpperBound;
-import org.checkerframework.checker.index.qual.Positive;
 import org.checkerframework.checker.index.qual.SameLen;
 import org.checkerframework.checker.index.qual.SearchIndexFor;
 import org.checkerframework.checker.index.qual.UpperBoundBottom;
@@ -42,6 +42,8 @@ import org.checkerframework.checker.index.samelen.SameLenAnnotatedTypeFactory;
 import org.checkerframework.checker.index.samelen.SameLenChecker;
 import org.checkerframework.checker.index.searchindex.SearchIndexAnnotatedTypeFactory;
 import org.checkerframework.checker.index.searchindex.SearchIndexChecker;
+import org.checkerframework.checker.index.substringindex.SubstringIndexAnnotatedTypeFactory;
+import org.checkerframework.checker.index.substringindex.SubstringIndexChecker;
 import org.checkerframework.checker.index.upperbound.UBQualifier.LessThanLengthOf;
 import org.checkerframework.checker.index.upperbound.UBQualifier.UpperBoundUnknownQualifier;
 import org.checkerframework.common.basetype.BaseAnnotatedTypeFactory;
@@ -49,21 +51,21 @@ import org.checkerframework.common.basetype.BaseTypeChecker;
 import org.checkerframework.common.value.ValueAnnotatedTypeFactory;
 import org.checkerframework.common.value.ValueChecker;
 import org.checkerframework.common.value.qual.BottomVal;
+import org.checkerframework.dataflow.analysis.FlowExpressions;
 import org.checkerframework.dataflow.cfg.node.Node;
+import org.checkerframework.framework.flow.CFAbstractStore;
+import org.checkerframework.framework.flow.CFStore;
+import org.checkerframework.framework.flow.CFValue;
 import org.checkerframework.framework.qual.PolyAll;
-import org.checkerframework.framework.type.AnnotatedTypeFactory;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
-import org.checkerframework.framework.util.AnnotationBuilder;
-import org.checkerframework.framework.util.FlowExpressionParseUtil;
-import org.checkerframework.framework.util.FlowExpressionParseUtil.FlowExpressionContext;
+import org.checkerframework.framework.util.FlowExpressionParseUtil.FlowExpressionParseException;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
-import org.checkerframework.framework.util.dependenttypes.DependentTypesError;
 import org.checkerframework.framework.util.dependenttypes.DependentTypesHelper;
-import org.checkerframework.framework.util.dependenttypes.DependentTypesTreeAnnotator;
+import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.TreeUtils;
 
@@ -80,20 +82,20 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
     public UpperBoundAnnotatedTypeFactory(BaseTypeChecker checker) {
         super(checker);
-        UNKNOWN = AnnotationUtils.fromClass(elements, UpperBoundUnknown.class);
-        BOTTOM = AnnotationUtils.fromClass(elements, UpperBoundBottom.class);
-        POLY = AnnotationUtils.fromClass(elements, PolyUpperBound.class);
+        UNKNOWN = AnnotationBuilder.fromClass(elements, UpperBoundUnknown.class);
+        BOTTOM = AnnotationBuilder.fromClass(elements, UpperBoundBottom.class);
+        POLY = AnnotationBuilder.fromClass(elements, PolyUpperBound.class);
 
-        addAliasedAnnotation(IndexFor.class, createLTLengthOfAnnotation());
-        addAliasedAnnotation(IndexOrLow.class, createLTLengthOfAnnotation());
-        addAliasedAnnotation(IndexOrHigh.class, createLTEqLengthOfAnnotation());
-        addAliasedAnnotation(SearchIndexFor.class, createLTLengthOfAnnotation());
-        addAliasedAnnotation(NegativeIndexFor.class, createLTLengthOfAnnotation());
-        addAliasedAnnotation(LengthOf.class, createLTEqLengthOfAnnotation());
+        addAliasedAnnotation(IndexFor.class, createLTLengthOfAnnotation(), true);
+        addAliasedAnnotation(IndexOrLow.class, createLTLengthOfAnnotation(), true);
+        addAliasedAnnotation(IndexOrHigh.class, createLTEqLengthOfAnnotation(), true);
+        addAliasedAnnotation(SearchIndexFor.class, createLTLengthOfAnnotation(), true);
+        addAliasedAnnotation(NegativeIndexFor.class, createLTLengthOfAnnotation(), true);
+        addAliasedAnnotation(LengthOf.class, createLTEqLengthOfAnnotation(), true);
         addAliasedAnnotation(PolyAll.class, POLY);
         addAliasedAnnotation(PolyIndex.class, POLY);
 
-        imf = new IndexMethodIdentifier(processingEnv);
+        imf = new IndexMethodIdentifier(this);
 
         this.postInit();
     }
@@ -133,6 +135,15 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     }
 
     /**
+     * Gets the annotated type factory of the Substring Index Checker running along with the Upper
+     * Bound checker, allowing it to refine the upper bounds of expressions annotated by Substring
+     * Index Checker annotations.
+     */
+    SubstringIndexAnnotatedTypeFactory getSubstringIndexAnnotatedTypeFactory() {
+        return getTypeFactoryOfSubchecker(SubstringIndexChecker.class);
+    }
+
+    /**
      * Provides a way to query the SameLen (same length) Checker, which determines the relationships
      * among the lengths of arrays.
      */
@@ -145,8 +156,13 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
      * program is non-negative or not, and checks that no possibly negative integers are used to
      * access arrays.
      */
-    private LowerBoundAnnotatedTypeFactory getLowerBoundAnnotatedTypeFactory() {
+    LowerBoundAnnotatedTypeFactory getLowerBoundAnnotatedTypeFactory() {
         return getTypeFactoryOfSubchecker(LowerBoundChecker.class);
+    }
+
+    /** Returns the LessThan Checker's annotated type factory. */
+    public LessThanAnnotatedTypeFactory getLessThanAnnotatedTypeFactory() {
+        return getTypeFactoryOfSubchecker(LessThanChecker.class);
     }
 
     @Override
@@ -184,85 +200,7 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
 
     @Override
     protected DependentTypesHelper createDependentTypesHelper() {
-        return new DependentTypesHelper(this) {
-            @Override
-            protected String standardizeString(
-                    final String expression,
-                    FlowExpressionContext context,
-                    TreePath localScope,
-                    boolean useLocalScope) {
-                if (DependentTypesError.isExpressionError(expression)) {
-                    return expression;
-                }
-                if (indexOf(expression, '-', '+', 0) == -1) {
-                    return super.standardizeString(expression, context, localScope, useLocalScope);
-                }
-
-                OffsetEquation equation = OffsetEquation.createOffsetFromJavaExpression(expression);
-                if (equation.hasError()) {
-                    return equation.getError();
-                }
-                try {
-                    equation.standardizeAndViewpointAdaptExpressions(
-                            context, localScope, useLocalScope);
-                } catch (FlowExpressionParseUtil.FlowExpressionParseException e) {
-                    return new DependentTypesError(expression, e).toString();
-                }
-
-                return equation.toString();
-            }
-
-            private int indexOf(String expression, char a, char b, int index) {
-                int aIndex = expression.indexOf(a, index);
-                int bIndex = expression.indexOf(b, index);
-                if (aIndex == -1) {
-                    return bIndex;
-                } else if (bIndex == -1) {
-                    return aIndex;
-                } else {
-                    return Math.min(aIndex, bIndex);
-                }
-            }
-
-            @Override
-            public TreeAnnotator createDependentTypesTreeAnnotator(AnnotatedTypeFactory factory) {
-                return new DependentTypesTreeAnnotator(factory, this) {
-                    @Override
-                    public Void visitMemberSelect(MemberSelectTree tree, AnnotatedTypeMirror type) {
-                        // UpperBoundTreeAnnotator changes the type of array.length to @LTEL
-                        // ("array"). If the DependentTypesTreeAnnotator tries to viewpoint
-                        // adapt it based on the declaration of length; it will fail.
-                        if (TreeUtils.isArrayLengthAccess(tree)) {
-                            return null;
-                        }
-                        return super.visitMemberSelect(tree, type);
-                    }
-                };
-            }
-        };
-    }
-
-    @Override
-    public AnnotationMirror aliasedAnnotation(AnnotationMirror a) {
-        if (AnnotationUtils.areSameByClass(a, IndexFor.class)
-                || AnnotationUtils.areSameByClass(a, SearchIndexFor.class)
-                || AnnotationUtils.areSameByClass(a, NegativeIndexFor.class)) {
-            List<String> stringList =
-                    AnnotationUtils.getElementValueArray(a, "value", String.class, true);
-            return createLTLengthOfAnnotation(stringList.toArray(new String[0]));
-        }
-        if (AnnotationUtils.areSameByClass(a, IndexOrLow.class)) {
-            List<String> stringList =
-                    AnnotationUtils.getElementValueArray(a, "value", String.class, true);
-            return createLTLengthOfAnnotation(stringList.toArray(new String[0]));
-        }
-        if (AnnotationUtils.areSameByClass(a, IndexOrHigh.class)
-                || AnnotationUtils.areSameByClass(a, LengthOf.class)) {
-            List<String> stringList =
-                    AnnotationUtils.getElementValueArray(a, "value", String.class, true);
-            return createLTEqLengthOfAnnotation(stringList.toArray(new String[0]));
-        }
-        return super.aliasedAnnotation(a);
+        return new OffsetDependentTypesHelper(this);
     }
 
     /**
@@ -277,7 +215,7 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     // Wrapper methods for accessing the IndexMethodIdentifier.
 
     public boolean isMathMin(Tree methodTree) {
-        return imf.isMathMin(methodTree, processingEnv);
+        return imf.isMathMin(methodTree);
     }
 
     public boolean isRandomNextInt(Tree methodTree) {
@@ -506,8 +444,15 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                 case DIVIDE:
                     addAnnotationForDivide(left, right, type);
                     break;
+                case REMAINDER:
+                    addAnnotationForRemainder(left, right, type);
+                    break;
                 case AND:
                     addAnnotationForAnd(left, right, type);
+                    break;
+                case RIGHT_SHIFT:
+                case UNSIGNED_RIGHT_SHIFT:
+                    addAnnotationForRightShift(left, right, type);
                     break;
                 default:
                     break;
@@ -515,23 +460,42 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
             return super.visitBinary(tree, type);
         }
 
+        /** Infers upper-bound annotation for {@code left >> right} and {@code left >>> right} */
+        private void addAnnotationForRightShift(
+                ExpressionTree left, ExpressionTree right, AnnotatedTypeMirror type) {
+            LowerBoundAnnotatedTypeFactory lowerBoundATF = getLowerBoundAnnotatedTypeFactory();
+            if (lowerBoundATF.isNonNegative(left)) {
+                AnnotationMirror annotation =
+                        getAnnotatedType(left).getAnnotationInHierarchy(UNKNOWN);
+                // For non-negative numbers, right shift is equivalent to division by a power of two
+                // The range of the shift amount is limited to 0..30 to avoid overflows and int/long differences
+                Long shiftAmount = IndexUtil.getExactValue(right, getValueAnnotatedTypeFactory());
+                if (shiftAmount != null && shiftAmount >= 0 && shiftAmount < Integer.SIZE - 1) {
+                    int divisor = 1 << shiftAmount;
+                    // Support average by shift just like for division
+                    UBQualifier plusDivQualifier = plusTreeDivideByVal(divisor, left);
+                    if (!plusDivQualifier.isUnknown()) {
+                        UBQualifier qualifier = UBQualifier.createUBQualifier(annotation);
+                        qualifier = qualifier.glb(plusDivQualifier);
+                        annotation = convertUBQualifierToAnnotation(qualifier);
+                    }
+                }
+                type.addAnnotation(annotation);
+            }
+        }
+
         private void addAnnotationForAnd(
                 ExpressionTree left, ExpressionTree right, AnnotatedTypeMirror type) {
+            LowerBoundAnnotatedTypeFactory lowerBoundATF = getLowerBoundAnnotatedTypeFactory();
             AnnotatedTypeMirror leftType = getAnnotatedType(left);
-            AnnotatedTypeMirror leftLBType =
-                    getLowerBoundAnnotatedTypeFactory().getAnnotatedType(left);
             AnnotationMirror leftResultType = UNKNOWN;
-            if (leftLBType.hasAnnotation(NonNegative.class)
-                    || leftLBType.hasAnnotation(Positive.class)) {
+            if (lowerBoundATF.isNonNegative(left)) {
                 leftResultType = leftType.getAnnotationInHierarchy(UNKNOWN);
             }
 
             AnnotatedTypeMirror rightType = getAnnotatedType(right);
-            AnnotatedTypeMirror rightLBType =
-                    getLowerBoundAnnotatedTypeFactory().getAnnotatedType(right);
             AnnotationMirror rightResultType = UNKNOWN;
-            if (rightLBType.hasAnnotation(NonNegative.class)
-                    || rightLBType.hasAnnotation(Positive.class)) {
+            if (lowerBoundATF.isNonNegative(right)) {
                 rightResultType = rightType.getAnnotationInHierarchy(UNKNOWN);
             }
 
@@ -541,6 +505,26 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         /** Gets a sequence tree for a length access tree, or null if it is not a length access. */
         private ExpressionTree getLengthSequenceTree(ExpressionTree lengthTree) {
             return IndexUtil.getLengthSequenceTree(lengthTree, imf, processingEnv);
+        }
+
+        /** Infers upper-bound annotation for {@code numerator % divisor}. */
+        private void addAnnotationForRemainder(
+                ExpressionTree numeratorTree,
+                ExpressionTree divisorTree,
+                AnnotatedTypeMirror resultType) {
+            LowerBoundAnnotatedTypeFactory lowerBoundATF = getLowerBoundAnnotatedTypeFactory();
+            UBQualifier result = UpperBoundUnknownQualifier.UNKNOWN;
+            // if numerator >= 0, then numerator%divisor <= numerator
+            if (lowerBoundATF.isNonNegative(numeratorTree)) {
+                result = UBQualifier.createUBQualifier(getAnnotatedType(numeratorTree), UNKNOWN);
+            }
+            // if divisor >= 0, then numerator%divisor < divisor
+            if (lowerBoundATF.isNonNegative(divisorTree)) {
+                UBQualifier divisor =
+                        UBQualifier.createUBQualifier(getAnnotatedType(divisorTree), UNKNOWN);
+                result = result.glb(divisor.plusOffset(1));
+            }
+            resultType.addAnnotation(convertUBQualifierToAnnotation(result));
         }
 
         private void addAnnotationForDivide(
@@ -563,8 +547,8 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
             result = result.glb(plusTreeDivideByVal(divisor.intValue(), numeratorTree));
 
             ExpressionTree numeratorSequenceTree = getLengthSequenceTree(numeratorTree);
-            // If the numerator is an array length access of an array with non-zero length, and the divisor is
-            // greater than one, glb the result with an LTL of the array.
+            // If the numerator is an array length access of an array with non-zero length, and the
+            // divisor is greater than one, glb the result with an LTL of the array.
             if (numeratorSequenceTree != null && divisor > 1) {
                 String arrayName = numeratorSequenceTree.toString();
                 int minlen =
@@ -606,8 +590,7 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                     }
                 }
                 if (!sequences.isEmpty()) {
-                    return UBQualifier.createUBQualifier(
-                            sequences, Collections.<String>emptyList());
+                    return UBQualifier.createUBQualifier(sequences, Collections.emptyList());
                 }
             }
 
@@ -630,7 +613,8 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                 }
 
                 if (imf.isRandomNextDouble(mitree, processingEnv)) {
-                    // Okay, so this is Random.nextDouble() * array.length, which must be NonNegative
+                    // Okay, so this is Random.nextDouble() * array.length, which must be
+                    // NonNegative
                     type.addAnnotation(createLTLengthOfAnnotation(seqTree.toString()));
                     return true;
                 }
@@ -660,6 +644,59 @@ public class UpperBoundAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         }
 
         LessThanLengthOf ltlQualifier = (LessThanLengthOf) qualifier;
-        return ltlQualifier.convertToAnnotationMirror(processingEnv);
+        return ltlQualifier.convertToAnnotation(processingEnv);
+    }
+
+    UBQualifier fromLessThan(ExpressionTree tree, TreePath treePath) {
+        List<String> lessThanExpressions =
+                getLessThanAnnotatedTypeFactory().getLessThanExpressions(tree);
+        if (lessThanExpressions == null) {
+            return null;
+        }
+        UBQualifier ubQualifier = fromLessThanOrEqual(tree, treePath, lessThanExpressions);
+        if (ubQualifier != null) {
+            return ubQualifier.plusOffset(1);
+        }
+        return null;
+    }
+
+    UBQualifier fromLessThanOrEqual(ExpressionTree tree, TreePath treePath) {
+        List<String> lessThanExpressions =
+                getLessThanAnnotatedTypeFactory().getLessThanExpressions(tree);
+        if (lessThanExpressions == null) {
+            return null;
+        }
+        UBQualifier ubQualifier = fromLessThanOrEqual(tree, treePath, lessThanExpressions);
+        return ubQualifier;
+    }
+
+    private UBQualifier fromLessThanOrEqual(
+            Tree tree, TreePath treePath, List<String> lessThanExpressions) {
+        UBQualifier ubQualifier = null;
+        for (String expression : lessThanExpressions) {
+            FlowExpressions.Receiver receiver;
+            try {
+                receiver = getReceiverFromJavaExpressionString(expression, treePath);
+            } catch (FlowExpressionParseException e) {
+                receiver = null;
+            }
+            if (receiver == null || !CFAbstractStore.canInsertReceiver(receiver)) {
+                continue;
+            }
+            CFStore store = getStoreBefore(tree);
+            if (store != null) {
+                CFValue value = store.getValue(receiver);
+                if (value != null && value.getAnnotations().size() == 1) {
+                    UBQualifier newUBQ =
+                            UBQualifier.createUBQualifier(value.getAnnotations().iterator().next());
+                    if (ubQualifier == null) {
+                        ubQualifier = newUBQ;
+                    } else {
+                        ubQualifier = ubQualifier.glb(newUBQ);
+                    }
+                }
+            }
+        }
+        return ubQualifier;
     }
 }

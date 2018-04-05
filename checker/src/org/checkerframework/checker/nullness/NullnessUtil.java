@@ -1,5 +1,7 @@
 package org.checkerframework.checker.nullness;
 
+// Uses annotations in comments because it may be run on a Java 7 JVM
+// when called from user code.
 /*>>>
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -69,7 +71,7 @@ public final class NullnessUtil {
      * @return the argument, casted to have the type qualifier @NonNull
      */
     public static @EnsuresNonNull("#1") <T extends /*@Nullable*/ Object> /*@NonNull*/ T castNonNull(
-            T ref) {
+            /*@Nullable*/ T ref) {
         assert ref != null : "Misuse of castNonNull: called with a null argument";
         return (/*@NonNull*/ T) ref;
     }

@@ -1,27 +1,23 @@
 package org.checkerframework.dataflow.cfg.block;
 
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import org.checkerframework.dataflow.cfg.node.Node;
 
-/**
- * Implementation of a regular basic block.
- *
- * @author Stefan Heule
- */
+/** Implementation of a regular basic block. */
 public class RegularBlockImpl extends SingleSuccessorBlockImpl implements RegularBlock {
 
     /** Internal representation of the contents. */
-    protected List<Node> contents;
+    protected final List<Node> contents;
 
     /**
      * Initialize an empty basic block to be filled with contents and linked to other basic blocks
      * later.
      */
     public RegularBlockImpl() {
-        contents = new LinkedList<>();
-        type = BlockType.REGULAR_BLOCK;
+        super(BlockType.REGULAR_BLOCK);
+        contents = new ArrayList<>();
     }
 
     /** Add a node to the contents of this basic block. */

@@ -4,32 +4,29 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Base class of the {@link Block} implementation hierarchy.
- *
- * @author Stefan Heule
- */
+/** Base class of the {@link Block} implementation hierarchy. */
 public abstract class BlockImpl implements Block {
 
     /** A unique ID for this node. */
-    protected long id = BlockImpl.uniqueID();
+    protected final long id = BlockImpl.uniqueID();
 
     /** The last ID that has already been used. */
     protected static long lastId = 0;
 
     /** The type of this basic block. */
-    protected BlockType type;
+    protected final BlockType type;
 
     /** The set of predecessors. */
-    protected Set<BlockImpl> predecessors;
+    protected final Set<BlockImpl> predecessors;
 
     /** @return a fresh identifier */
     private static long uniqueID() {
         return lastId++;
     }
 
-    public BlockImpl() {
-        predecessors = new HashSet<>();
+    public BlockImpl(BlockType type) {
+        this.type = type;
+        this.predecessors = new HashSet<>();
     }
 
     @Override

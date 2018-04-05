@@ -15,23 +15,24 @@ import com.sun.source.util.TreePath;
 import com.sun.source.util.Trees;
 import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.util.Context;
+import com.sun.tools.javac.util.DiagnosticSource;
+import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
 import com.sun.tools.javac.util.Log;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Stack;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import javax.annotation.processing.AbstractProcessor;
@@ -59,7 +60,6 @@ import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.ElementUtils;
 import org.checkerframework.javacutil.ErrorHandler;
 import org.checkerframework.javacutil.ErrorReporter;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.TreeUtils;
 
 /**
@@ -223,8 +223,8 @@ import org.checkerframework.javacutil.TreeUtils;
 
     // Whether to print [] around a set of type parameters in order to clearly see where they end
     // e.g.  <E extends F, F extends Object>
-    // without this option the E is printed as:   E extends F extends Object
-    // with this option:                          E [ extends F [ extends Object super Void ] super Void ]
+    // without this option the E is printed: E extends F extends Object
+    // with this option:                    E [ extends F [ extends Object super Void ] super Void ]
     // when multiple type variables are used this becomes useful very quickly
     "printVerboseGenerics",
 
@@ -258,7 +258,7 @@ import org.checkerframework.javacutil.TreeUtils;
     /// Progress tracing
 
     // Output file names before checking
-    // TODO: it looks like support for this was lost!
+    // org.checkerframework.framework.source.SourceChecker.typeProcess()
     "filenames",
 
     // Output all subtyping checks
@@ -530,17 +530,17 @@ public abstract class SourceChecker extends AbstractTypeProcessor
         }
 
         this.messages = new Properties();
-        Stack<Class<?>> checkers = new Stack<Class<?>>();
+        ArrayDeque<Class<?>> checkers = new ArrayDeque<Class<?>>();
 
         Class<?> currClass = this.getClass();
         while (currClass != SourceChecker.class) {
-            checkers.push(currClass);
+            checkers.addFirst(currClass);
             currClass = currClass.getSuperclass();
         }
-        checkers.push(SourceChecker.class);
+        checkers.addFirst(SourceChecker.class);
 
-        while (!checkers.empty()) {
-            messages.putAll(getProperties(checkers.pop(), MSGS_FILE));
+        while (!checkers.isEmpty()) {
+            messages.putAll(getProperties(checkers.removeFirst(), MSGS_FILE));
         }
         return this.messages;
     }
@@ -765,6 +765,17 @@ public abstract class SourceChecker extends AbstractTypeProcessor
             if (this.currentRoot != null && this.currentRoot.getSourceFile() != null) {
                 msg.append("\nCompilation unit: " + this.currentRoot.getSourceFile().getName());
             }
+            if (this.visitor != null) {
+                DiagnosticPosition pos = (DiagnosticPosition) this.visitor.lastVisited;
+                DiagnosticSource source =
+                        new DiagnosticSource(this.currentRoot.getSourceFile(), null);
+                int linenr = source.getLineNumber(pos.getStartPosition());
+                int col = source.getColumnNumber(pos.getStartPosition(), true);
+                String line = source.getLine(pos.getStartPosition());
+
+                msg.append(
+                        "\nLast visited tree at line " + linenr + " column " + col + ":\n" + line);
+            }
 
             msg.append(
                     "\nException: "
@@ -954,6 +965,13 @@ public abstract class SourceChecker extends AbstractTypeProcessor
         }
         if (p.getCompilationUnit() != currentRoot) {
             currentRoot = p.getCompilationUnit();
+            if (hasOption("filenames")) {
+                message(
+                        Kind.NOTE,
+                        "Checker: %s is type-checking: %s",
+                        (Object) this.getClass().getSimpleName(),
+                        currentRoot.getSourceFile().getName());
+            }
             visitor.setRoot(currentRoot);
         }
 
@@ -1010,15 +1028,28 @@ public abstract class SourceChecker extends AbstractTypeProcessor
     // public void dumpState() {
     //     System.out.printf("SourceChecker = %s%n", this);
     //     System.out.printf("  env = %s%n", env);
-    //     System.out.printf("    env.elementUtils = %s%n", ((JavacProcessingEnvironment) env).elementUtils);
-    //     System.out.printf("      env.elementUtils.types = %s%n", ((JavacProcessingEnvironment) env).elementUtils.types);
-    //     System.out.printf("      env.elementUtils.enter = %s%n", ((JavacProcessingEnvironment) env).elementUtils.enter);
-    //     System.out.printf("    env.typeUtils = %s%n", ((JavacProcessingEnvironment) env).typeUtils);
+    //     System.out.printf(
+    //             "    env.elementUtils = %s%n", ((JavacProcessingEnvironment) env).elementUtils);
+    //     System.out.printf(
+    //             "      env.elementUtils.types = %s%n",
+    //             ((JavacProcessingEnvironment) env).elementUtils.types);
+    //     System.out.printf(
+    //             "      env.elementUtils.enter = %s%n",
+    //             ((JavacProcessingEnvironment) env).elementUtils.enter);
+    //     System.out.printf(
+    //             "    env.typeUtils = %s%n", ((JavacProcessingEnvironment) env).typeUtils);
     //     System.out.printf("  trees = %s%n", trees);
-    //     System.out.printf("    trees.enter = %s%n", ((com.sun.tools.javac.api.JavacTrees) trees).enter);
-    //     System.out.printf("    trees.elements = %s%n", ((com.sun.tools.javac.api.JavacTrees) trees).elements);
-    //     System.out.printf("      trees.elements.types = %s%n", ((com.sun.tools.javac.api.JavacTrees) trees).elements.types);
-    //     System.out.printf("      trees.elements.enter = %s%n", ((com.sun.tools.javac.api.JavacTrees) trees).elements.enter);
+    //     System.out.printf(
+    //             "    trees.enter = %s%n", ((com.sun.tools.javac.api.JavacTrees) trees).enter);
+    //     System.out.printf(
+    //             "    trees.elements = %s%n",
+    //             ((com.sun.tools.javac.api.JavacTrees) trees).elements);
+    //     System.out.printf(
+    //             "      trees.elements.types = %s%n",
+    //             ((com.sun.tools.javac.api.JavacTrees) trees).elements.types);
+    //     System.out.printf(
+    //             "      trees.elements.enter = %s%n",
+    //             ((com.sun.tools.javac.api.JavacTrees) trees).elements.enter);
     // }
 
     /**
@@ -1322,19 +1353,22 @@ public abstract class SourceChecker extends AbstractTypeProcessor
             return false;
         }
 
+        // trees.getPath might be slow, but this is only used in error reporting
+        // TODO: #1586 this might return null within a cloned finally block and
+        // then a warning that should be suppressed isn't. Fix this when fixing #1586.
         /*@Nullable*/ TreePath path = trees.getPath(this.currentRoot, tree);
         if (path == null) {
             return false;
         }
 
         /*@Nullable*/ VariableTree var = TreeUtils.enclosingVariable(path);
-        if (var != null && shouldSuppressWarnings(InternalUtils.symbol(var), errKey)) {
+        if (var != null && shouldSuppressWarnings(TreeUtils.elementFromTree(var), errKey)) {
             return true;
         }
 
         /*@Nullable*/ MethodTree method = TreeUtils.enclosingMethod(path);
         if (method != null) {
-            /*@Nullable*/ Element elt = InternalUtils.symbol(method);
+            /*@Nullable*/ Element elt = TreeUtils.elementFromTree(method);
 
             if (shouldSuppressWarnings(elt, errKey)) {
                 return true;
@@ -1350,7 +1384,7 @@ public abstract class SourceChecker extends AbstractTypeProcessor
 
         /*@Nullable*/ ClassTree cls = TreeUtils.enclosingClass(path);
         if (cls != null) {
-            /*@Nullable*/ Element elt = InternalUtils.symbol(cls);
+            /*@Nullable*/ Element elt = TreeUtils.elementFromTree(cls);
 
             if (shouldSuppressWarnings(elt, errKey)) {
                 return true;
@@ -1650,7 +1684,7 @@ public abstract class SourceChecker extends AbstractTypeProcessor
                 this.getClass().getAnnotation(SupportedLintOptions.class);
 
         if (sl == null) {
-            return Collections.</*@NonNull*/ String>emptySet();
+            return Collections.emptySet();
         }
 
         /*@Nullable*/ String /*@Nullable*/ [] slValue = sl.value();
@@ -1661,7 +1695,7 @@ public abstract class SourceChecker extends AbstractTypeProcessor
         for (String s : lintArray) {
             lintSet.add(s);
         }
-        return Collections.</*@NonNull*/ String>unmodifiableSet(lintSet);
+        return Collections.unmodifiableSet(lintSet);
     }
 
     /**
@@ -1767,7 +1801,7 @@ public abstract class SourceChecker extends AbstractTypeProcessor
         // {@link org.checkerframework.framework.source.SupportedOptions}
         // we additionally add
         Class<?> clazz = this.getClass();
-        List<Class<?>> clazzPrefixes = new LinkedList<>();
+        List<Class<?>> clazzPrefixes = new ArrayList<>();
 
         do {
             clazzPrefixes.add(clazz);
@@ -1780,7 +1814,7 @@ public abstract class SourceChecker extends AbstractTypeProcessor
         } while (clazz != null
                 && !clazz.getName().equals(AbstractTypeProcessor.class.getCanonicalName()));
 
-        return Collections.</*@NonNull*/ String>unmodifiableSet(options);
+        return Collections.unmodifiableSet(options);
     }
 
     /**
@@ -1897,10 +1931,14 @@ public abstract class SourceChecker extends AbstractTypeProcessor
      * checker.skipUses} property. In contrast to {@link #shouldSkipUses(Element)} this version can
      * also be used from primitive types, which don't have an element.
      *
+     * <p>Checkers that require their annotations not to be checked on certain JDK classes may
+     * override this method to skip them. They shall call {@code super.shouldSkipUses(typerName)} to
+     * also skip the classes matching the pattern.
+     *
      * @param typeName the fully-qualified name of a type
      * @return true iff the enclosing class of element should be skipped
      */
-    public final boolean shouldSkipUses(String typeName) {
+    public boolean shouldSkipUses(String typeName) {
         // System.out.printf("shouldSkipUses(%s) %s%nskipUses %s%nonlyUses %s%nresult %s%n",
         //                   element,
         //                   name,
@@ -1931,7 +1969,7 @@ public abstract class SourceChecker extends AbstractTypeProcessor
      * @return true if checker should not test node
      */
     public final boolean shouldSkipDefs(ClassTree node) {
-        String qualifiedName = InternalUtils.typeOf(node).toString();
+        String qualifiedName = TreeUtils.typeOf(node).toString();
         // System.out.printf("shouldSkipDefs(%s) %s%nskipDefs %s%nonlyDefs %s%nresult %s%n%n",
         //                   node,
         //                   qualifiedName,

@@ -16,7 +16,6 @@ import javax.lang.model.type.TypeMirror;
  * <p>A {@code TransferResult} contains one or two stores (for 'then' and 'else'), and zero or more
  * stores with a cause ({@link TypeMirror}).
  *
- * @author Stefan Heule
  * @param <S> the {@link Store} used to keep track of intermediate results
  */
 public abstract class TransferResult<A extends AbstractValue<A>, S extends Store<S>> {
@@ -26,7 +25,7 @@ public abstract class TransferResult<A extends AbstractValue<A>, S extends Store
      * {@link org.checkerframework.dataflow.cfg.node.Node} does not throw any exceptions). Does not
      * necessarily contain a store for every exception, in which case the in-store will be used.
      */
-    protected /*@Nullable*/ Map<TypeMirror, S> exceptionalStores;
+    protected final /*@Nullable*/ Map<TypeMirror, S> exceptionalStores;
 
     /**
      * The abstract value of the {@link org.checkerframework.dataflow.cfg.node.Node} associated with
@@ -34,8 +33,10 @@ public abstract class TransferResult<A extends AbstractValue<A>, S extends Store
      */
     protected /*@Nullable*/ A resultValue;
 
-    public TransferResult(/*@Nullable*/ A resultValue) {
+    public TransferResult(
+            /*@Nullable*/ A resultValue, /*@Nullable*/ Map<TypeMirror, S> exceptionalStores) {
         this.resultValue = resultValue;
+        this.exceptionalStores = exceptionalStores;
     }
 
     /** @return the abstract value produced by the transfer function */

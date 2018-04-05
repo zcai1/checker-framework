@@ -66,13 +66,13 @@ import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.util.Context;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -136,6 +136,7 @@ import org.checkerframework.dataflow.cfg.node.InstanceOfNode;
 import org.checkerframework.dataflow.cfg.node.IntegerDivisionNode;
 import org.checkerframework.dataflow.cfg.node.IntegerLiteralNode;
 import org.checkerframework.dataflow.cfg.node.IntegerRemainderNode;
+import org.checkerframework.dataflow.cfg.node.LambdaResultExpressionNode;
 import org.checkerframework.dataflow.cfg.node.LeftShiftNode;
 import org.checkerframework.dataflow.cfg.node.LessThanNode;
 import org.checkerframework.dataflow.cfg.node.LessThanOrEqualNode;
@@ -175,11 +176,11 @@ import org.checkerframework.dataflow.cfg.node.ValueLiteralNode;
 import org.checkerframework.dataflow.cfg.node.VariableDeclarationNode;
 import org.checkerframework.dataflow.cfg.node.WideningConversionNode;
 import org.checkerframework.dataflow.qual.TerminatesExecution;
+import org.checkerframework.dataflow.util.IdentityMostlySingleton;
 import org.checkerframework.dataflow.util.MostlySingleton;
 import org.checkerframework.javacutil.AnnotationProvider;
 import org.checkerframework.javacutil.BasicAnnotationProvider;
 import org.checkerframework.javacutil.ElementUtils;
-import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.Pair;
 import org.checkerframework.javacutil.TreeUtils;
 import org.checkerframework.javacutil.TypesUtils;
@@ -206,8 +207,6 @@ import org.checkerframework.javacutil.trees.TreeBuilder;
  *       same block as both 'then' and 'else' successor. This phase removes these cases while
  *       preserving the control flow structure.
  * </ol>
- *
- * @author Stefan Heule
  */
 public class CFGBuilder {
 
@@ -227,7 +226,7 @@ public class CFGBuilder {
      * Class declarations that have been encountered when building the control-flow graph for a
      * method.
      */
-    protected final List<ClassTree> declaredClasses = new LinkedList<>();
+    protected final List<ClassTree> declaredClasses = new ArrayList<>();
 
     public List<ClassTree> getDeclaredClasses() {
         return declaredClasses;
@@ -237,7 +236,7 @@ public class CFGBuilder {
      * Lambdas encountered when building the control-flow graph for a method, variable initializer,
      * or initializer.
      */
-    protected final List<LambdaExpressionTree> declaredLambdas = new LinkedList<>();
+    protected final List<LambdaExpressionTree> declaredLambdas = new ArrayList<>();
 
     public List<LambdaExpressionTree> getDeclaredLambdas() {
         return declaredLambdas;
@@ -465,6 +464,7 @@ public class CFGBuilder {
     protected static class NodeWithExceptionsHolder extends ExtendedNode {
 
         protected Node node;
+
         /**
          * Map from exception type to labels of successors that may be reached as a result of that
          * exception.
@@ -510,7 +510,9 @@ public class CFGBuilder {
 
         public ConditionalJump(Label trueSucc, Label falseSucc) {
             super(ExtendedNodeType.CONDITIONAL_JUMP);
+            assert trueSucc != null;
             this.trueSucc = trueSucc;
+            assert falseSucc != null;
             this.falseSucc = falseSucc;
         }
 
@@ -551,6 +553,7 @@ public class CFGBuilder {
 
         public UnconditionalJump(Label jumpTarget) {
             super(ExtendedNodeType.UNCONDITIONAL_JUMP);
+            assert jumpTarget != null;
             this.jumpTarget = jumpTarget;
         }
 
@@ -573,7 +576,7 @@ public class CFGBuilder {
     protected static class Label {
         private static int uid = 0;
 
-        protected String name;
+        protected final String name;
 
         public Label(String name) {
             this.name = name;
@@ -624,6 +627,23 @@ public class CFGBuilder {
         public TryCatchFrame(Types types, List<Pair<TypeMirror, Label>> catchLabels) {
             this.types = types;
             this.catchLabels = catchLabels;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            if (this.catchLabels.isEmpty()) {
+                sb.append("TryCatchFrame: no catch labels.\n");
+            } else {
+                sb.append("TryCatchFrame: ");
+            }
+            for (Pair<TypeMirror, Label> ptml : this.catchLabels) {
+                sb.append(ptml.first.toString());
+                sb.append(" -> ");
+                sb.append(ptml.second.toString());
+                sb.append('\n');
+            }
+            return sb.toString();
         }
 
         /**
@@ -709,6 +729,13 @@ public class CFGBuilder {
         }
 
         @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("TryFinallyFrame: finallyLabel: " + finallyLabel + '\n');
+            return sb.toString();
+        }
+
+        @Override
         public boolean possibleLabels(TypeMirror thrown, Set<Label> labels) {
             labels.add(finallyLabel);
             return true;
@@ -722,11 +749,11 @@ public class CFGBuilder {
      */
     protected static class TryStack {
         protected Label exitLabel;
-        protected LinkedList<TryFrame> frames;
+        protected ArrayDeque<TryFrame> frames;
 
         public TryStack(Label exitLabel) {
             this.exitLabel = exitLabel;
-            this.frames = new LinkedList<>();
+            this.frames = new ArrayDeque<>();
         }
 
         public void pushFrame(TryFrame frame) {
@@ -752,6 +779,90 @@ public class CFGBuilder {
             }
             labels.add(exitLabel);
             return labels;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("TryStack: exitLabel: " + this.exitLabel + '\n');
+            if (this.frames.isEmpty()) {
+                sb.append("No TryFrames.\n");
+            }
+            for (TryFrame tf : this.frames) {
+                sb.append(tf.toString());
+            }
+            return sb.toString();
+        }
+    }
+
+    /**
+     * A map that keeps track of new labels added within a try block. For names that are outside of
+     * the try block, the finally label is returned. This ensures that a finally block is executed
+     * when control flows outside of the try block.
+     */
+    @SuppressWarnings("serial")
+    protected static class TryFinallyScopeMap extends HashMap<Name, Label> {
+        private final Map<Name, Label> accessedNames;
+
+        protected TryFinallyScopeMap() {
+            this.accessedNames = new HashMap<>();
+        }
+
+        @Override
+        public Label get(Object key) {
+            if (super.containsKey(key)) {
+                return super.get(key);
+            } else {
+                if (accessedNames.containsKey(key)) {
+                    return accessedNames.get(key);
+                }
+                Label l = new Label();
+                accessedNames.put((Name) key, l);
+                return l;
+            }
+        }
+
+        @Override
+        public boolean containsKey(Object key) {
+            return true;
+        }
+
+        public Map<Name, Label> getAccessedNames() {
+            return accessedNames;
+        }
+    }
+
+    /** Storage cell for a single Label, with tracking whether it was accessed. */
+    protected static class TryFinallyScopeCell {
+        private Label label;
+        private boolean accessed;
+
+        protected TryFinallyScopeCell() {
+            this.label = null;
+            this.accessed = false;
+        }
+
+        protected TryFinallyScopeCell(Label label) {
+            assert label != null;
+            this.label = label;
+            this.accessed = false;
+        }
+
+        public Label accessLabel() {
+            if (label == null) {
+                label = new Label();
+            }
+            accessed = true;
+            return label;
+        }
+
+        public Label peekLabel() {
+            assert label != null;
+            return label;
+        }
+
+        public boolean wasAccessed() {
+            return accessed;
         }
     }
 
@@ -875,7 +986,6 @@ public class CFGBuilder {
                     }
                 }
             }
-
             return cfg;
         }
 
@@ -1068,19 +1178,23 @@ public class CFGBuilder {
 
     /** Tuple class with up to three members. */
     protected static class Tuple<A, B, C> {
-        public A a;
-        public B b;
-        public C c;
+        public final A a;
+        public final B b;
+        public final C c;
 
         public Tuple(A a, B b) {
-            this.a = a;
-            this.b = b;
+            this(a, b, null);
         }
 
         public Tuple(A a, B b, C c) {
             this.a = a;
             this.b = b;
             this.c = c;
+        }
+
+        @Override
+        public String toString() {
+            return "Tuple<" + a + ", " + b + ", " + c + ">";
         }
     }
 
@@ -1095,7 +1209,7 @@ public class CFGBuilder {
          * @param in the result of phase one
          * @return a control flow graph that might still contain degenerate basic block (such as
          *     empty regular basic blocks or conditional blocks with the same block as 'then' and
-         *     'else' sucessor)
+         *     'else' successor)
          */
         public ControlFlowGraph process(PhaseOneResult in) {
 
@@ -1166,24 +1280,28 @@ public class CFGBuilder {
                             // 'then' and 'else' successor of the conditional block
                             final Label thenLabel = cj.getThenLabel();
                             final Label elseLabel = cj.getElseLabel();
+                            Integer target = bindings.get(thenLabel);
+                            assert target != null;
                             missingEdges.add(
                                     new Tuple<>(
-                                            new SingleSuccessorBlockImpl() {
+                                            new SingleSuccessorBlockImpl(BlockType.REGULAR_BLOCK) {
                                                 @Override
                                                 public void setSuccessor(BlockImpl successor) {
                                                     cb.setThenSuccessor(successor);
                                                 }
                                             },
-                                            bindings.get(thenLabel)));
+                                            target));
+                            target = bindings.get(elseLabel);
+                            assert target != null;
                             missingEdges.add(
                                     new Tuple<>(
-                                            new SingleSuccessorBlockImpl() {
+                                            new SingleSuccessorBlockImpl(BlockType.REGULAR_BLOCK) {
                                                 @Override
                                                 public void setSuccessor(BlockImpl successor) {
                                                     cb.setElseSuccessor(successor);
                                                 }
                                             },
-                                            bindings.get(elseLabel)));
+                                            target));
                             break;
                         }
                     case UNCONDITIONAL_JUMP:
@@ -1198,7 +1316,9 @@ public class CFGBuilder {
                         } else if (node.getLabel() == exceptionalExitLabel) {
                             block.setSuccessor(exceptionalExitBlock);
                         } else {
-                            missingEdges.add(new Tuple<>(block, bindings.get(node.getLabel())));
+                            Integer target = bindings.get(node.getLabel());
+                            assert target != null;
+                            missingEdges.add(new Tuple<>(block, target));
                         }
                         block = new RegularBlockImpl();
                         break;
@@ -1224,6 +1344,8 @@ public class CFGBuilder {
                             TypeMirror cause = entry.getKey();
                             for (Label label : entry.getValue()) {
                                 Integer target = bindings.get(label);
+                                // TODO: This is sometimes null; is this a problem?
+                                // assert target != null;
                                 missingExceptionalEdges.add(
                                         new Tuple<ExceptionBlockImpl, Integer, TypeMirror>(
                                                 e, target, cause));
@@ -1237,6 +1359,7 @@ public class CFGBuilder {
             // add missing edges
             for (Tuple<? extends SingleSuccessorBlockImpl, Integer, ?> p : missingEdges) {
                 Integer index = p.b;
+                assert index != null : "CFGBuilder: problem in CFG construction " + p.a;
                 ExtendedNode extendedNode = nodeList.get(index);
                 BlockImpl target = extendedNode.getBlock();
                 SingleSuccessorBlockImpl source = p.a;
@@ -1266,6 +1389,7 @@ public class CFGBuilder {
                     in.underlyingAST,
                     in.treeLookupMap,
                     in.convertedTreeLookupMap,
+                    in.unaryAssignNodeLookupMap,
                     in.returnNodes);
         }
     }
@@ -1280,8 +1404,9 @@ public class CFGBuilder {
      */
     protected static class PhaseOneResult {
 
-        private final IdentityHashMap<Tree, Node> treeLookupMap;
-        private final IdentityHashMap<Tree, Node> convertedTreeLookupMap;
+        private final IdentityHashMap<Tree, Set<Node>> treeLookupMap;
+        private final IdentityHashMap<Tree, Set<Node>> convertedTreeLookupMap;
+        private final IdentityHashMap<UnaryTree, AssignmentNode> unaryAssignNodeLookupMap;
         private final UnderlyingAST underlyingAST;
         private final Map<Label, Integer> bindings;
         private final ArrayList<ExtendedNode> nodeList;
@@ -1290,8 +1415,9 @@ public class CFGBuilder {
 
         public PhaseOneResult(
                 UnderlyingAST underlyingAST,
-                IdentityHashMap<Tree, Node> treeLookupMap,
-                IdentityHashMap<Tree, Node> convertedTreeLookupMap,
+                IdentityHashMap<Tree, Set<Node>> treeLookupMap,
+                IdentityHashMap<Tree, Set<Node>> convertedTreeLookupMap,
+                IdentityHashMap<UnaryTree, AssignmentNode> unaryAssignNodeLookupMap,
                 ArrayList<ExtendedNode> nodeList,
                 Map<Label, Integer> bindings,
                 Set<Integer> leaders,
@@ -1299,6 +1425,7 @@ public class CFGBuilder {
             this.underlyingAST = underlyingAST;
             this.treeLookupMap = treeLookupMap;
             this.convertedTreeLookupMap = convertedTreeLookupMap;
+            this.unaryAssignNodeLookupMap = unaryAssignNodeLookupMap;
             this.nodeList = nodeList;
             this.bindings = bindings;
             this.leaders = leaders;
@@ -1373,10 +1500,16 @@ public class CFGBuilder {
         protected AnnotationProvider annotationProvider;
 
         /**
-         * Current {@link Label} to which a break statement with no label should jump, or null if
+         * Current {@link TryFinallyScopeCell} to which a return statement should jump, or null if
          * there is no valid destination.
          */
-        protected /*@Nullable*/ Label breakTargetL;
+        protected /*@Nullable*/ TryFinallyScopeCell returnTargetL;
+
+        /**
+         * Current {@link TryFinallyScopeCell} to which a break statement with no label should jump,
+         * or null if there is no valid destination.
+         */
+        protected /*@Nullable*/ TryFinallyScopeCell breakTargetL;
 
         /**
          * Map from AST label Names to CFG {@link Label}s for breaks. Each labeled statement creates
@@ -1385,10 +1518,10 @@ public class CFGBuilder {
         protected Map<Name, Label> breakLabels;
 
         /**
-         * Current {@link Label} to which a continue statement with no label should jump, or null if
-         * there is no valid destination.
+         * Current {@link TryFinallyScopeCell} to which a continue statement with no label should
+         * jump, or null if there is no valid destination.
          */
-        protected /*@Nullable*/ Label continueTargetL;
+        protected /*@Nullable*/ TryFinallyScopeCell continueTargetL;
 
         /**
          * Map from AST label Names to CFG {@link Label}s for continues. Each labeled statement
@@ -1397,16 +1530,19 @@ public class CFGBuilder {
         protected Map<Name, Label> continueLabels;
 
         /**
-         * Maps from AST {@link Tree}s to {@link Node}s. Every Tree that produces a value will have
-         * at least one corresponding Node. Trees that undergo conversions, such as boxing or
-         * unboxing, can map to two distinct Nodes. The Node for the pre-conversion value is stored
-         * in the treeLookupMap, while the Node for the post-conversion value is stored in the
-         * convertedTreeLookupMap.
+         * Maps from AST {@link Tree}s to sets of {@link Node}s. Every Tree that produces a value
+         * will have at least one corresponding Node. Trees that undergo conversions, such as boxing
+         * or unboxing, can map to two distinct Nodes. The Node for the pre-conversion value is
+         * stored in the treeLookupMap, while the Node for the post-conversion value is stored in
+         * the convertedTreeLookupMap.
          */
-        protected IdentityHashMap<Tree, Node> treeLookupMap;
+        protected IdentityHashMap<Tree, Set<Node>> treeLookupMap;
 
-        /** Map from AST {@link Tree}s to post-conversion {@link Node}s. */
-        protected IdentityHashMap<Tree, Node> convertedTreeLookupMap;
+        /** Map from AST {@link Tree}s to post-conversion sets of {@link Node}s. */
+        protected IdentityHashMap<Tree, Set<Node>> convertedTreeLookupMap;
+
+        /** Map from AST {@link UnaryTree}s to compound {@link AssignmentNode}s. */
+        protected IdentityHashMap<UnaryTree, AssignmentNode> unaryAssignNodeLookupMap;
 
         /** The list of extended nodes. */
         protected ArrayList<ExtendedNode> nodeList;
@@ -1445,24 +1581,45 @@ public class CFGBuilder {
                 TreeBuilder treeBuilder,
                 AnnotationProvider annotationProvider) {
             this.env = env;
-            this.tryStack = new TryStack(exceptionalExitLabel);
             this.treeBuilder = treeBuilder;
             this.annotationProvider = annotationProvider;
             elements = env.getElementUtils();
             types = env.getTypeUtils();
+            if (trees == null) {
+                trees = Trees.instance(env);
+            }
 
             // initialize lists and maps
             treeLookupMap = new IdentityHashMap<>();
             convertedTreeLookupMap = new IdentityHashMap<>();
+            unaryAssignNodeLookupMap = new IdentityHashMap<>();
             nodeList = new ArrayList<>();
             bindings = new HashMap<>();
             leaders = new HashSet<>();
+
+            tryStack = new TryStack(exceptionalExitLabel);
+            returnTargetL = new TryFinallyScopeCell(regularExitLabel);
             breakLabels = new HashMap<>();
             continueLabels = new HashMap<>();
             returnNodes = new ArrayList<>();
 
             // traverse AST of the method body
-            scan(bodyPath, null);
+            Node finalNode = scan(bodyPath, null);
+
+            // If we are building the CFG for a lambda with a single expression as the body, then add an extra node
+            // for the result of that lambda
+            if (underlyingAST.getKind() == UnderlyingAST.Kind.LAMBDA) {
+                LambdaExpressionTree lambdaTree =
+                        ((UnderlyingAST.CFGLambda) underlyingAST).getLambdaTree();
+                if (lambdaTree.getBodyKind() == LambdaExpressionTree.BodyKind.EXPRESSION) {
+                    Node resultNode =
+                            new LambdaResultExpressionNode(
+                                    (ExpressionTree) lambdaTree.getBody(),
+                                    finalNode,
+                                    env.getTypeUtils());
+                    extendWithNode(resultNode);
+                }
+            }
 
             // add marker to indicate that the next block will be the exit block
             // Note: if there is a return statement earlier in the method (which
@@ -1476,6 +1633,7 @@ public class CFGBuilder {
                     underlyingAST,
                     treeLookupMap,
                     convertedTreeLookupMap,
+                    unaryAssignNodeLookupMap,
                     nodeList,
                     bindings,
                     leaders,
@@ -1490,7 +1648,9 @@ public class CFGBuilder {
                 TreeBuilder treeBuilder,
                 AnnotationProvider annotationProvider) {
             trees = Trees.instance(env);
+            // TODO: Isn't this costly? Is there no cache we can reuse?
             TreePath bodyPath = trees.getPath(root, underlyingAST.getCode());
+            assert bodyPath != null;
             return process(
                     bodyPath,
                     env,
@@ -1522,13 +1682,23 @@ public class CFGBuilder {
             if (tree == null) {
                 return;
             }
-            if (!treeLookupMap.containsKey(tree)) {
-                treeLookupMap.put(tree, node);
+            Set<Node> existing = treeLookupMap.get(tree);
+            if (existing == null) {
+                treeLookupMap.put(tree, new IdentityMostlySingleton<>(node));
+            } else if (!existing.contains(node)) {
+                existing.add(node);
+            } else {
+                // Nothing to do if existing already contains the Node.
             }
 
             Tree enclosingParens = parenMapping.get(tree);
             while (enclosingParens != null) {
-                treeLookupMap.put(enclosingParens, node);
+                Set<Node> exp = treeLookupMap.get(enclosingParens);
+                if (exp == null) {
+                    treeLookupMap.put(enclosingParens, new IdentityMostlySingleton<>(node));
+                } else if (!existing.contains(node)) {
+                    exp.add(node);
+                }
                 enclosingParens = parenMapping.get(enclosingParens);
             }
         }
@@ -1556,7 +1726,25 @@ public class CFGBuilder {
         protected void addToConvertedLookupMap(Tree tree, Node node) {
             assert tree != null;
             assert treeLookupMap.containsKey(tree);
-            convertedTreeLookupMap.put(tree, node);
+            Set<Node> existing = convertedTreeLookupMap.get(tree);
+            if (existing == null) {
+                convertedTreeLookupMap.put(tree, new IdentityMostlySingleton<>(node));
+            } else if (!existing.contains(node)) {
+                existing.add(node);
+            } else {
+                // Nothing to do if existing already contains the Node.
+            }
+        }
+
+        /**
+         * Add a unary tree in the compound assign lookup map. This method is used to update the
+         * UnaryTree-AssignmentNode mapping with compound assign nodes.
+         *
+         * @param tree the tree used as a key in the map
+         * @param unaryAssignNode the node to add to the lookup map
+         */
+        protected void addToUnaryAssignLookupMap(UnaryTree tree, AssignmentNode unaryAssignNode) {
+            unaryAssignNodeLookupMap.put(tree, unaryAssignNode);
         }
 
         /**
@@ -1694,6 +1882,7 @@ public class CFGBuilder {
          * Add the label {@code l} to the extended node that will be placed next in the sequence.
          */
         protected void addLabelForNextNode(Label l) {
+            assert !bindings.containsKey(l);
             leaders.add(nodeList.size());
             bindings.put(l, nodeList.size());
         }
@@ -1784,7 +1973,7 @@ public class CFGBuilder {
                         new MethodInvocationNode(
                                 primValueCall,
                                 primValueAccess,
-                                Collections.<Node>emptyList(),
+                                Collections.emptyList(),
                                 getCurrentPath());
                 unboxed.setInSource(false);
 
@@ -1800,7 +1989,7 @@ public class CFGBuilder {
         }
 
         private TreeInfo getTreeInfo(Tree tree) {
-            final TypeMirror type = InternalUtils.typeOf(tree);
+            final TypeMirror type = TreeUtils.typeOf(tree);
             final boolean boxed = TypesUtils.isBoxedPrimitive(type);
             final TypeMirror unboxedType = boxed ? types.unboxedType(type) : type;
 
@@ -2145,55 +2334,45 @@ public class CFGBuilder {
                 TypeMirror lastParamType = formals.get(lastArgIndex).asType();
                 List<Node> dimensions = new ArrayList<>();
                 List<Node> initializers = new ArrayList<>();
-
-                if (numActuals == numFormals - 1) {
-                    // Apply method invocation conversion to all actual
-                    // arguments, then create and append an empty array
+                if (numActuals == numFormals
+                        && types.isAssignable(
+                                TreeUtils.typeOf(actualExprs.get(numActuals - 1)), lastParamType)) {
+                    // Normal call with no array creation, apply method
+                    // invocation conversion to all arguments.
                     for (int i = 0; i < numActuals; i++) {
                         Node actualVal = scan(actualExprs.get(i), null);
                         convertedNodes.add(
                                 methodInvocationConvert(actualVal, formals.get(i).asType()));
                     }
+                } else {
+                    assert lastParamType instanceof ArrayType
+                            : "variable argument formal must be an array";
+                    // Apply method invocation conversion to lastArgIndex
+                    // arguments and use the remaining ones to initialize
+                    // an array.
+                    for (int i = 0; i < lastArgIndex; i++) {
+                        Node actualVal = scan(actualExprs.get(i), null);
+                        convertedNodes.add(
+                                methodInvocationConvert(actualVal, formals.get(i).asType()));
+                    }
+
+                    List<ExpressionTree> inits = new ArrayList<ExpressionTree>();
+                    TypeMirror elemType = ((ArrayType) lastParamType).getComponentType();
+                    for (int i = lastArgIndex; i < numActuals; i++) {
+                        inits.add(actualExprs.get(i));
+                        Node actualVal = scan(actualExprs.get(i), null);
+                        initializers.add(assignConvert(actualVal, elemType));
+                    }
+
+                    NewArrayTree wrappedVarargs = treeBuilder.buildNewArray(elemType, inits);
+                    handleArtificialTree(wrappedVarargs);
 
                     Node lastArgument =
-                            new ArrayCreationNode(null, lastParamType, dimensions, initializers);
+                            new ArrayCreationNode(
+                                    wrappedVarargs, lastParamType, dimensions, initializers);
                     extendWithNode(lastArgument);
 
                     convertedNodes.add(lastArgument);
-                } else {
-                    TypeMirror actualType = InternalUtils.typeOf(actualExprs.get(lastArgIndex));
-                    if (numActuals == numFormals && types.isAssignable(actualType, lastParamType)) {
-                        // Normal call with no array creation, apply method
-                        // invocation conversion to all arguments.
-                        for (int i = 0; i < numActuals; i++) {
-                            Node actualVal = scan(actualExprs.get(i), null);
-                            convertedNodes.add(
-                                    methodInvocationConvert(actualVal, formals.get(i).asType()));
-                        }
-                    } else {
-                        assert lastParamType instanceof ArrayType
-                                : "variable argument formal must be an array";
-                        // Apply method invocation conversion to lastArgIndex
-                        // arguments and use the remaining ones to initialize
-                        // an array.
-                        for (int i = 0; i < lastArgIndex; i++) {
-                            Node actualVal = scan(actualExprs.get(i), null);
-                            convertedNodes.add(
-                                    methodInvocationConvert(actualVal, formals.get(i).asType()));
-                        }
-
-                        TypeMirror elemType = ((ArrayType) lastParamType).getComponentType();
-                        for (int i = lastArgIndex; i < numActuals; i++) {
-                            Node actualVal = scan(actualExprs.get(i), null);
-                            initializers.add(assignConvert(actualVal, elemType));
-                        }
-
-                        Node lastArgument =
-                                new ArrayCreationNode(
-                                        null, lastParamType, dimensions, initializers);
-                        extendWithNode(lastArgument);
-                        convertedNodes.add(lastArgument);
-                    }
                 }
             } else {
                 for (int i = 0; i < numActuals; i++) {
@@ -2372,7 +2551,7 @@ public class CFGBuilder {
             ExtendedNode extendedNode = extendWithNodeWithExceptions(node, thrownSet);
 
             /* Check for the TerminatesExecution annotation. */
-            Element methodElement = InternalUtils.symbol(tree);
+            Element methodElement = TreeUtils.elementFromTree(tree);
             boolean terminatesExecution =
                     annotationProvider.getDeclAnnotation(methodElement, TerminatesExecution.class)
                             != null;
@@ -2441,20 +2620,28 @@ public class CFGBuilder {
         protected VariableTree getAssertionsEnabledVariable() {
             if (ea == null) {
                 String name = uniqueName("assertionsEnabled");
-                MethodTree enclosingMethod = TreeUtils.enclosingMethod(getCurrentPath());
-                Element owner;
-                if (enclosingMethod != null) {
-                    owner = TreeUtils.elementFromDeclaration(enclosingMethod);
-                } else {
-                    ClassTree enclosingClass = TreeUtils.enclosingClass(getCurrentPath());
-                    owner = TreeUtils.elementFromDeclaration(enclosingClass);
-                }
+                Element owner = findOwner();
                 ExpressionTree initializer = null;
                 ea =
                         treeBuilder.buildVariableDecl(
                                 types.getPrimitiveType(TypeKind.BOOLEAN), name, owner, initializer);
             }
             return ea;
+        }
+
+        /**
+         * Find nearest owner element(Method or Class) which holds current tree
+         *
+         * @return Nearest owner element of current tree
+         */
+        private Element findOwner() {
+            MethodTree enclosingMethod = TreeUtils.enclosingMethod(getCurrentPath());
+            if (enclosingMethod != null) {
+                return TreeUtils.elementFromDeclaration(enclosingMethod);
+            } else {
+                ClassTree enclosingClass = TreeUtils.enclosingClass(getCurrentPath());
+                return TreeUtils.elementFromDeclaration(enclosingClass);
+            }
         }
 
         /**
@@ -2499,7 +2686,7 @@ public class CFGBuilder {
 
             AssignmentNode assignmentNode;
             ExpressionTree variable = tree.getVariable();
-            TypeMirror varType = InternalUtils.typeOf(variable);
+            TypeMirror varType = TreeUtils.typeOf(variable);
 
             // case 1: field access
             if (TreeUtils.isFieldAccess(variable)) {
@@ -2638,9 +2825,9 @@ public class CFGBuilder {
                         Node targetLHS = scan(tree.getVariable(), p);
                         Node value = scan(tree.getExpression(), p);
 
-                        TypeMirror exprType = InternalUtils.typeOf(tree);
-                        TypeMirror leftType = InternalUtils.typeOf(tree.getVariable());
-                        TypeMirror rightType = InternalUtils.typeOf(tree.getExpression());
+                        TypeMirror exprType = TreeUtils.typeOf(tree);
+                        TypeMirror leftType = TreeUtils.typeOf(tree.getVariable());
+                        TypeMirror rightType = TreeUtils.typeOf(tree.getExpression());
                         TypeMirror promotedType = binaryPromotedType(leftType, rightType);
                         Node targetRHS = binaryNumericPromotion(targetLHS, promotedType);
                         value = binaryNumericPromotion(value, promotedType);
@@ -2658,6 +2845,10 @@ public class CFGBuilder {
                         } else if (kind == Tree.Kind.DIVIDE_ASSIGNMENT) {
                             if (TypesUtils.isIntegral(exprType)) {
                                 operNode = new IntegerDivisionNode(operTree, targetRHS, value);
+
+                                TypeElement throwableElement =
+                                        elements.getTypeElement("java.lang.ArithmeticException");
+                                extendWithNodeWithException(operNode, throwableElement.asType());
                             } else {
                                 operNode = new FloatingDivisionNode(operTree, targetRHS, value);
                             }
@@ -2665,6 +2856,10 @@ public class CFGBuilder {
                             assert kind == Kind.REMAINDER_ASSIGNMENT;
                             if (TypesUtils.isIntegral(exprType)) {
                                 operNode = new IntegerRemainderNode(operTree, targetRHS, value);
+
+                                TypeElement throwableElement =
+                                        elements.getTypeElement("java.lang.ArithmeticException");
+                                extendWithNodeWithException(operNode, throwableElement.asType());
                             } else {
                                 operNode = new FloatingRemainderNode(operTree, targetRHS, value);
                             }
@@ -2690,8 +2885,8 @@ public class CFGBuilder {
                         Node targetLHS = scan(tree.getVariable(), p);
                         Node value = scan(tree.getExpression(), p);
 
-                        TypeMirror leftType = InternalUtils.typeOf(tree.getVariable());
-                        TypeMirror rightType = InternalUtils.typeOf(tree.getExpression());
+                        TypeMirror leftType = TreeUtils.typeOf(tree.getVariable());
+                        TypeMirror rightType = TreeUtils.typeOf(tree.getExpression());
 
                         if (TypesUtils.isString(leftType) || TypesUtils.isString(rightType)) {
                             assert (kind == Tree.Kind.PLUS_ASSIGNMENT);
@@ -2744,7 +2939,7 @@ public class CFGBuilder {
                         Node targetLHS = scan(tree.getVariable(), p);
                         Node value = scan(tree.getExpression(), p);
 
-                        TypeMirror leftType = InternalUtils.typeOf(tree.getVariable());
+                        TypeMirror leftType = TreeUtils.typeOf(tree.getVariable());
 
                         Node targetRHS = unaryNumericPromotion(targetLHS);
                         value = unaryNumericPromotion(value);
@@ -2785,8 +2980,8 @@ public class CFGBuilder {
                     Node targetLHS = scan(tree.getVariable(), p);
                     Node value = scan(tree.getExpression(), p);
 
-                    TypeMirror leftType = InternalUtils.typeOf(tree.getVariable());
-                    TypeMirror rightType = InternalUtils.typeOf(tree.getExpression());
+                    TypeMirror leftType = TreeUtils.typeOf(tree.getVariable());
+                    TypeMirror rightType = TreeUtils.typeOf(tree.getExpression());
 
                     Node targetRHS = null;
                     if (isNumericOrBoxed(leftType) && isNumericOrBoxed(rightType)) {
@@ -2855,9 +3050,9 @@ public class CFGBuilder {
                     {
                         // see JLS 15.17
 
-                        TypeMirror exprType = InternalUtils.typeOf(tree);
-                        TypeMirror leftType = InternalUtils.typeOf(leftTree);
-                        TypeMirror rightType = InternalUtils.typeOf(rightTree);
+                        TypeMirror exprType = TreeUtils.typeOf(tree);
+                        TypeMirror leftType = TreeUtils.typeOf(leftTree);
+                        TypeMirror rightType = TreeUtils.typeOf(rightTree);
                         TypeMirror promotedType = binaryPromotedType(leftType, rightType);
 
                         Node left = binaryNumericPromotion(scan(leftTree, p), promotedType);
@@ -2868,6 +3063,10 @@ public class CFGBuilder {
                         } else if (kind == Tree.Kind.DIVIDE) {
                             if (TypesUtils.isIntegral(exprType)) {
                                 r = new IntegerDivisionNode(tree, left, right);
+
+                                TypeElement throwableElement =
+                                        elements.getTypeElement("java.lang.ArithmeticException");
+                                extendWithNodeWithException(r, throwableElement.asType());
                             } else {
                                 r = new FloatingDivisionNode(tree, left, right);
                             }
@@ -2875,6 +3074,10 @@ public class CFGBuilder {
                             assert kind == Kind.REMAINDER;
                             if (TypesUtils.isIntegral(exprType)) {
                                 r = new IntegerRemainderNode(tree, left, right);
+
+                                TypeElement throwableElement =
+                                        elements.getTypeElement("java.lang.ArithmeticException");
+                                extendWithNodeWithException(r, throwableElement.asType());
                             } else {
                                 r = new FloatingRemainderNode(tree, left, right);
                             }
@@ -2888,8 +3091,8 @@ public class CFGBuilder {
                         // see JLS 15.18
 
                         // TypeMirror exprType = InternalUtils.typeOf(tree);
-                        TypeMirror leftType = InternalUtils.typeOf(leftTree);
-                        TypeMirror rightType = InternalUtils.typeOf(rightTree);
+                        TypeMirror leftType = TreeUtils.typeOf(leftTree);
+                        TypeMirror rightType = TreeUtils.typeOf(rightTree);
 
                         if (TypesUtils.isString(leftType) || TypesUtils.isString(rightType)) {
                             assert (kind == Tree.Kind.PLUS);
@@ -2939,12 +3142,12 @@ public class CFGBuilder {
                 case LESS_THAN_EQUAL:
                     {
                         // see JLS 15.20.1
-                        TypeMirror leftType = InternalUtils.typeOf(leftTree);
+                        TypeMirror leftType = TreeUtils.typeOf(leftTree);
                         if (TypesUtils.isBoxedPrimitive(leftType)) {
                             leftType = types.unboxedType(leftType);
                         }
 
-                        TypeMirror rightType = InternalUtils.typeOf(rightTree);
+                        TypeMirror rightType = TreeUtils.typeOf(rightTree);
                         if (TypesUtils.isBoxedPrimitive(rightType)) {
                             rightType = types.unboxedType(rightType);
                         }
@@ -3013,8 +3216,8 @@ public class CFGBuilder {
                 case XOR:
                     {
                         // see JLS 15.22
-                        TypeMirror leftType = InternalUtils.typeOf(leftTree);
-                        TypeMirror rightType = InternalUtils.typeOf(rightTree);
+                        TypeMirror leftType = TreeUtils.typeOf(leftTree);
+                        TypeMirror rightType = TreeUtils.typeOf(rightTree);
                         boolean isBooleanOp =
                                 TypesUtils.isBooleanType(leftType)
                                         && TypesUtils.isBooleanType(rightType);
@@ -3108,7 +3311,7 @@ public class CFGBuilder {
             if (label == null) {
                 assert breakTargetL != null : "no target for break statement";
 
-                extendWithExtendedNode(new UnconditionalJump(breakTargetL));
+                extendWithExtendedNode(new UnconditionalJump(breakTargetL.accessLabel()));
             } else {
                 assert breakLabels.containsKey(label);
 
@@ -3138,15 +3341,41 @@ public class CFGBuilder {
             }
 
             public void build() {
-                Label oldBreakTargetL = breakTargetL;
-                breakTargetL = new Label();
+                TryFinallyScopeCell oldBreakTargetL = breakTargetL;
+                breakTargetL = new TryFinallyScopeCell(new Label());
                 int cases = caseBodyLabels.length - 1;
                 for (int i = 0; i < cases; ++i) {
                     caseBodyLabels[i] = new Label();
                 }
-                caseBodyLabels[cases] = breakTargetL;
+                caseBodyLabels[cases] = breakTargetL.peekLabel();
 
-                switchExpr = unbox(scan(switchTree.getExpression(), p));
+                TypeMirror switchExprType = TreeUtils.typeOf(switchTree.getExpression());
+                VariableTree variable =
+                        treeBuilder.buildVariableDecl(
+                                switchExprType, uniqueName("switch"), findOwner(), null);
+                handleArtificialTree(variable);
+
+                VariableDeclarationNode variableNode = new VariableDeclarationNode(variable);
+                variableNode.setInSource(false);
+                extendWithNode(variableNode);
+
+                ExpressionTree variableUse = treeBuilder.buildVariableUse(variable);
+                handleArtificialTree(variable);
+
+                LocalVariableNode variableUseNode = new LocalVariableNode(variableUse);
+                variableUseNode.setInSource(false);
+                extendWithNode(variableUseNode);
+
+                Node switchExprNode = unbox(scan(switchTree.getExpression(), p));
+
+                AssignmentTree assign =
+                        treeBuilder.buildAssignment(variableUse, switchTree.getExpression());
+                handleArtificialTree(assign);
+
+                switchExpr = new AssignmentNode(assign, variableUseNode, switchExprNode);
+                switchExpr.setInSource(false);
+                extendWithNode(switchExpr);
+
                 extendWithNode(
                         new MarkerNode(
                                 switchTree, "start of switch statement", env.getTypeUtils()));
@@ -3167,7 +3396,7 @@ public class CFGBuilder {
                     buildCase(switchTree.getCases().get(defaultIndex), defaultIndex);
                 }
 
-                addLabelForNextNode(breakTargetL);
+                addLabelForNextNode(breakTargetL.peekLabel());
                 breakTargetL = oldBreakTargetL;
             }
 
@@ -3213,7 +3442,7 @@ public class CFGBuilder {
         @Override
         public Node visitConditionalExpression(ConditionalExpressionTree tree, Void p) {
             // see JLS 15.25
-            TypeMirror exprType = InternalUtils.typeOf(tree);
+            TypeMirror exprType = TreeUtils.typeOf(tree);
 
             Label trueStart = new Label();
             Label falseStart = new Label();
@@ -3245,7 +3474,7 @@ public class CFGBuilder {
             if (label == null) {
                 assert continueTargetL != null : "no target for continue statement";
 
-                extendWithExtendedNode(new UnconditionalJump(continueTargetL));
+                extendWithExtendedNode(new UnconditionalJump(continueTargetL.accessLabel()));
             } else {
                 assert continueLabels.containsKey(label);
 
@@ -3272,11 +3501,11 @@ public class CFGBuilder {
                 conditionStart = new Label();
             }
 
-            Label oldBreakTargetL = breakTargetL;
-            breakTargetL = loopExit;
+            TryFinallyScopeCell oldBreakTargetL = breakTargetL;
+            breakTargetL = new TryFinallyScopeCell(loopExit);
 
-            Label oldContinueTargetL = continueTargetL;
-            continueTargetL = conditionStart;
+            TryFinallyScopeCell oldContinueTargetL = continueTargetL;
+            continueTargetL = new TryFinallyScopeCell(conditionStart);
 
             // Loop body
             addLabelForNextNode(loopEntry);
@@ -3331,11 +3560,11 @@ public class CFGBuilder {
                 updateStart = new Label();
             }
 
-            Label oldBreakTargetL = breakTargetL;
-            breakTargetL = loopExit;
+            TryFinallyScopeCell oldBreakTargetL = breakTargetL;
+            breakTargetL = new TryFinallyScopeCell(loopExit);
 
-            Label oldContinueTargetL = continueTargetL;
-            continueTargetL = updateStart;
+            TryFinallyScopeCell oldContinueTargetL = continueTargetL;
+            continueTargetL = new TryFinallyScopeCell(updateStart);
 
             // Distinguish loops over Iterables from loops over arrays.
 
@@ -3347,7 +3576,7 @@ public class CFGBuilder {
             ExpressionTree expression = tree.getExpression();
             StatementTree statement = tree.getStatement();
 
-            TypeMirror exprType = InternalUtils.typeOf(expression);
+            TypeMirror exprType = TreeUtils.typeOf(expression);
 
             if (types.isSubtype(exprType, iterableType)) {
                 // Take the upper bound of a type variable or wildcard
@@ -3384,7 +3613,7 @@ public class CFGBuilder {
                         new MethodInvocationNode(
                                 iteratorCall,
                                 iteratorAccessNode,
-                                Collections.<Node>emptyList(),
+                                Collections.emptyList(),
                                 getCurrentPath());
                 iteratorCallNode.setInSource(false);
                 extendWithNode(iteratorCallNode);
@@ -3418,7 +3647,7 @@ public class CFGBuilder {
                         new MethodInvocationNode(
                                 hasNextCall,
                                 hasNextAccessNode,
-                                Collections.<Node>emptyList(),
+                                Collections.emptyList(),
                                 getCurrentPath());
                 hasNextCallNode.setInSource(false);
                 extendWithNode(hasNextCallNode);
@@ -3450,7 +3679,7 @@ public class CFGBuilder {
                         new MethodInvocationNode(
                                 nextCall,
                                 nextAccessNode,
-                                Collections.<Node>emptyList(),
+                                Collections.emptyList(),
                                 getCurrentPath());
                 nextCallNode.setInSource(false);
                 extendWithNode(nextCallNode);
@@ -3553,6 +3782,8 @@ public class CFGBuilder {
                 arrayAccessNode.setInSource(false);
                 extendWithNode(arrayAccessNode);
                 translateAssignment(variable, new LocalVariableNode(variable), arrayAccessNode);
+                Element npeElement = elements.getTypeElement("java.lang.NullPointerException");
+                extendWithNodeWithException(arrayAccessNode, npeElement.asType());
 
                 if (statement != null) {
                     scan(statement, p);
@@ -3600,7 +3831,7 @@ public class CFGBuilder {
 
         protected VariableTree createEnhancedForLoopIteratorVariable(
                 MethodInvocationTree iteratorCall, VariableElement variableElement) {
-            TypeMirror iteratorType = InternalUtils.typeOf(iteratorCall);
+            TypeMirror iteratorType = TreeUtils.typeOf(iteratorCall);
 
             // Declare and initialize a new, unique iterator variable
             VariableTree iteratorVariable =
@@ -3614,7 +3845,7 @@ public class CFGBuilder {
 
         protected VariableTree createEnhancedForLoopArrayVariable(
                 ExpressionTree expression, VariableElement variableElement) {
-            TypeMirror arrayType = InternalUtils.typeOf(expression);
+            TypeMirror arrayType = TreeUtils.typeOf(expression);
 
             // Declare and initialize a temporary array variable
             VariableTree arrayVariable =
@@ -3644,11 +3875,11 @@ public class CFGBuilder {
                 updateStart = new Label();
             }
 
-            Label oldBreakTargetL = breakTargetL;
-            breakTargetL = loopExit;
+            TryFinallyScopeCell oldBreakTargetL = breakTargetL;
+            breakTargetL = new TryFinallyScopeCell(loopExit);
 
-            Label oldContinueTargetL = continueTargetL;
-            continueTargetL = updateStart;
+            TryFinallyScopeCell oldContinueTargetL = continueTargetL;
+            continueTargetL = new TryFinallyScopeCell(updateStart);
 
             // Initializer
             for (StatementTree init : tree.getInitializer()) {
@@ -3770,7 +4001,13 @@ public class CFGBuilder {
         public Node visitArrayAccess(ArrayAccessTree tree, Void p) {
             Node array = scan(tree.getExpression(), p);
             Node index = unaryNumericPromotion(scan(tree.getIndex(), p));
-            return extendWithNode(new ArrayAccessNode(tree, array, index));
+            Node arrayAccess = extendWithNode(new ArrayAccessNode(tree, array, index));
+            Element aioobeElement =
+                    elements.getTypeElement("java.lang.ArrayIndexOutOfBoundsException");
+            extendWithNodeWithException(arrayAccess, aioobeElement.asType());
+            Element npeElement = elements.getTypeElement("java.lang.NullPointerException");
+            extendWithNodeWithException(arrayAccess, npeElement.asType());
+            return arrayAccess;
         }
 
         @Override
@@ -3850,7 +4087,7 @@ public class CFGBuilder {
         public Node visitNewArray(NewArrayTree tree, Void p) {
             // see JLS 15.10
 
-            ArrayType type = (ArrayType) InternalUtils.typeOf(tree);
+            ArrayType type = (ArrayType) TreeUtils.typeOf(tree);
             TypeMirror elemType = type.getComponentType();
 
             List<? extends ExpressionTree> dimensions = tree.getDimensions();
@@ -3916,12 +4153,12 @@ public class CFGBuilder {
         }
 
         /**
-         * Maps a {@code Tree} its directly enclosing {@code ParenthesizedTree} if one exists.
+         * Maps a {@code Tree} to its directly enclosing {@code ParenthesizedTree} if one exists.
          *
          * <p>This map is used by {@link CFGTranslationPhaseOne#addToLookupMap(Node)} to associate a
          * {@code ParenthesizedTree} with the dataflow {@code Node} that was used during inference.
          * This map is necessary because dataflow does not create a {@code Node} for a {@code
-         * ParenthesizedTree.}
+         * ParenthesizedTree}.
          */
         private final Map<Tree, ParenthesizedTree> parenMapping = new HashMap<>();
 
@@ -3966,8 +4203,9 @@ public class CFGBuilder {
                 returnNodes.add(result);
                 extendWithNode(result);
             }
-            extendWithExtendedNode(new UnconditionalJump(regularExitLabel));
-            // TODO: return statements should also flow to an enclosing finally block
+
+            extendWithExtendedNode(new UnconditionalJump(this.returnTargetL.accessLabel()));
+
             return result;
         }
 
@@ -4064,22 +4302,48 @@ public class CFGBuilder {
 
             List<Pair<TypeMirror, Label>> catchLabels = new ArrayList<>();
             for (CatchTree c : catches) {
-                TypeMirror type = InternalUtils.typeOf(c.getParameter().getType());
+                TypeMirror type = TreeUtils.typeOf(c.getParameter().getType());
                 assert type != null : "exception parameters must have a type";
                 catchLabels.add(Pair.of(type, new Label()));
             }
 
+            // Store return/break/continue labels, just in case we need them for a finally block.
+            TryFinallyScopeCell oldReturnTargetL = returnTargetL;
+            TryFinallyScopeCell oldBreakTargetL = breakTargetL;
+            Map<Name, Label> oldBreakLabels = breakLabels;
+            TryFinallyScopeCell oldContinueTargetL = continueTargetL;
+            Map<Name, Label> oldContinueLabels = continueLabels;
+
             Label finallyLabel = null;
+            Label exceptionalFinallyLabel = null;
+
             if (finallyBlock != null) {
                 finallyLabel = new Label();
-                tryStack.pushFrame(new TryFinallyFrame(finallyLabel));
+
+                exceptionalFinallyLabel = new Label();
+                tryStack.pushFrame(new TryFinallyFrame(exceptionalFinallyLabel));
+
+                returnTargetL = new TryFinallyScopeCell();
+
+                breakTargetL = new TryFinallyScopeCell();
+                breakLabels = new TryFinallyScopeMap();
+
+                continueTargetL = new TryFinallyScopeCell();
+                continueLabels = new TryFinallyScopeMap();
             }
 
             Label doneLabel = new Label();
 
             tryStack.pushFrame(new TryCatchFrame(types, catchLabels));
 
+            extendWithNode(
+                    new MarkerNode(
+                            tree, "start of try block #" + tree.hashCode(), env.getTypeUtils()));
             scan(tree.getBlock(), p);
+            extendWithNode(
+                    new MarkerNode(
+                            tree, "end of try block #" + tree.hashCode(), env.getTypeUtils()));
+
             extendWithExtendedNode(new UnconditionalJump(firstNonNull(finallyLabel, doneLabel)));
 
             tryStack.popFrame();
@@ -4087,26 +4351,218 @@ public class CFGBuilder {
             int catchIndex = 0;
             for (CatchTree c : catches) {
                 addLabelForNextNode(catchLabels.get(catchIndex).second);
+                extendWithNode(
+                        new MarkerNode(
+                                tree,
+                                "start of catch block for " + c.getClass() + " #" + tree.hashCode(),
+                                env.getTypeUtils()));
                 scan(c, p);
+                extendWithNode(
+                        new MarkerNode(
+                                tree,
+                                "end of catch block for " + c.getClass() + " #" + tree.hashCode(),
+                                env.getTypeUtils()));
+
                 catchIndex++;
                 extendWithExtendedNode(
                         new UnconditionalJump(firstNonNull(finallyLabel, doneLabel)));
             }
 
             if (finallyLabel != null) {
-                tryStack.popFrame();
-                addLabelForNextNode(finallyLabel);
-                scan(finallyBlock, p);
+                // Reset values before analyzing the finally block!
 
-                TypeMirror throwableType = elements.getTypeElement("java.lang.Throwable").asType();
-                extendWithNodeWithException(
-                        new MarkerNode(tree, "end of finally block", env.getTypeUtils()),
-                        throwableType);
+                tryStack.popFrame();
+
+                { // Scan 'finallyBlock' for only 'finallyLabel' (a successful path)
+                    addLabelForNextNode(finallyLabel);
+                    extendWithNode(
+                            new MarkerNode(
+                                    tree,
+                                    "start of finally block #" + tree.hashCode(),
+                                    env.getTypeUtils()));
+                    scan(finallyBlock, p);
+                    extendWithNode(
+                            new MarkerNode(
+                                    tree,
+                                    "end of finally block #" + tree.hashCode(),
+                                    env.getTypeUtils()));
+                    extendWithExtendedNode(new UnconditionalJump(doneLabel));
+                }
+
+                if (hasExceptionalPath(exceptionalFinallyLabel)) {
+                    // If an exceptional path exists, scan 'finallyBlock' for 'exceptionalFinallyLabel',
+                    // and scan copied 'finallyBlock' for 'finallyLabel' (a successful path). If there
+                    // is no successful path, it will be removed in later phase.
+                    // TODO: Don't we need a separate finally block for each kind of exception?
+                    addLabelForNextNode(exceptionalFinallyLabel);
+                    extendWithNode(
+                            new MarkerNode(
+                                    tree,
+                                    "start of finally block for Throwable",
+                                    env.getTypeUtils()));
+
+                    scan(finallyBlock, p);
+
+                    TypeMirror throwableType =
+                            elements.getTypeElement("java.lang.Throwable").asType();
+                    NodeWithExceptionsHolder throwing =
+                            extendWithNodeWithException(
+                                    new MarkerNode(
+                                            tree,
+                                            "end of finally block for Throwable",
+                                            env.getTypeUtils()),
+                                    throwableType);
+
+                    throwing.setTerminatesExecution(true);
+                }
+
+                if (returnTargetL.wasAccessed()) {
+                    addLabelForNextNode(returnTargetL.peekLabel());
+                    returnTargetL = oldReturnTargetL;
+
+                    extendWithNode(
+                            new MarkerNode(
+                                    tree,
+                                    "start of finally block for return #" + tree.hashCode(),
+                                    env.getTypeUtils()));
+                    scan(finallyBlock, p);
+                    extendWithNode(
+                            new MarkerNode(
+                                    tree,
+                                    "end of finally block for return #" + tree.hashCode(),
+                                    env.getTypeUtils()));
+                    extendWithExtendedNode(new UnconditionalJump(returnTargetL.accessLabel()));
+                } else {
+                    returnTargetL = oldReturnTargetL;
+                }
+
+                if (breakTargetL.wasAccessed()) {
+                    addLabelForNextNode(breakTargetL.peekLabel());
+                    breakTargetL = oldBreakTargetL;
+
+                    extendWithNode(
+                            new MarkerNode(
+                                    tree,
+                                    "start of finally block for break #" + tree.hashCode(),
+                                    env.getTypeUtils()));
+                    scan(finallyBlock, p);
+                    extendWithNode(
+                            new MarkerNode(
+                                    tree,
+                                    "end of finally block for break #" + tree.hashCode(),
+                                    env.getTypeUtils()));
+                    extendWithExtendedNode(new UnconditionalJump(breakTargetL.accessLabel()));
+                } else {
+                    breakTargetL = oldBreakTargetL;
+                }
+
+                Map<Name, Label> accessedBreakLabels =
+                        ((TryFinallyScopeMap) breakLabels).getAccessedNames();
+                if (!accessedBreakLabels.isEmpty()) {
+                    breakLabels = oldBreakLabels;
+
+                    for (Entry<Name, Label> access : accessedBreakLabels.entrySet()) {
+                        addLabelForNextNode(access.getValue());
+                        extendWithNode(
+                                new MarkerNode(
+                                        tree,
+                                        "start of finally block for break label "
+                                                + access.getKey()
+                                                + " #"
+                                                + tree.hashCode(),
+                                        env.getTypeUtils()));
+                        scan(finallyBlock, p);
+                        extendWithNode(
+                                new MarkerNode(
+                                        tree,
+                                        "end of finally block for break label "
+                                                + access.getKey()
+                                                + " #"
+                                                + tree.hashCode(),
+                                        env.getTypeUtils()));
+                        extendWithExtendedNode(
+                                new UnconditionalJump(breakLabels.get(access.getKey())));
+                    }
+                } else {
+                    breakLabels = oldBreakLabels;
+                }
+
+                if (continueTargetL.wasAccessed()) {
+                    addLabelForNextNode(continueTargetL.peekLabel());
+                    continueTargetL = oldContinueTargetL;
+
+                    extendWithNode(
+                            new MarkerNode(
+                                    tree,
+                                    "start of finally block for continue #" + tree.hashCode(),
+                                    env.getTypeUtils()));
+                    scan(finallyBlock, p);
+                    extendWithNode(
+                            new MarkerNode(
+                                    tree,
+                                    "end of finally block for continue #" + tree.hashCode(),
+                                    env.getTypeUtils()));
+                    extendWithExtendedNode(new UnconditionalJump(continueTargetL.accessLabel()));
+                } else {
+                    continueTargetL = oldContinueTargetL;
+                }
+
+                Map<Name, Label> accessedContinueLabels =
+                        ((TryFinallyScopeMap) continueLabels).getAccessedNames();
+                if (!accessedContinueLabels.isEmpty()) {
+                    continueLabels = oldContinueLabels;
+
+                    for (Entry<Name, Label> access : accessedContinueLabels.entrySet()) {
+                        addLabelForNextNode(access.getValue());
+                        extendWithNode(
+                                new MarkerNode(
+                                        tree,
+                                        "start of finally block for continue label "
+                                                + access.getKey()
+                                                + " #"
+                                                + tree.hashCode(),
+                                        env.getTypeUtils()));
+                        scan(finallyBlock, p);
+                        extendWithNode(
+                                new MarkerNode(
+                                        tree,
+                                        "end of finally block for continue label "
+                                                + access.getKey()
+                                                + " #"
+                                                + tree.hashCode(),
+                                        env.getTypeUtils()));
+                        extendWithExtendedNode(
+                                new UnconditionalJump(continueLabels.get(access.getKey())));
+                    }
+                } else {
+                    continueLabels = oldContinueLabels;
+                }
             }
 
             addLabelForNextNode(doneLabel);
 
             return null;
+        }
+
+        /**
+         * Returns whether an exceptional node for {@code target} exists in {@link #nodeList} or
+         * not.
+         *
+         * @param target label for exception
+         * @return true when an exceptional node for {@code target} exists in {@link #nodeList}
+         */
+        private boolean hasExceptionalPath(Label target) {
+            for (ExtendedNode node : nodeList) {
+                if (node instanceof NodeWithExceptionsHolder) {
+                    NodeWithExceptionsHolder exceptionalNode = (NodeWithExceptionsHolder) node;
+                    for (Set<Label> labels : exceptionalNode.getExceptions().values()) {
+                        if (labels.contains(target)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
         }
 
         @Override
@@ -4128,7 +4584,7 @@ public class CFGBuilder {
         @Override
         public Node visitTypeCast(TypeCastTree tree, Void p) {
             final Node operand = scan(tree.getExpression(), p);
-            final TypeMirror type = InternalUtils.typeOf(tree.getType());
+            final TypeMirror type = TreeUtils.typeOf(tree.getType());
             final Node node = new TypeCastNode(tree, operand, type);
             final TypeElement cceElement = elements.getTypeElement("java.lang.ClassCastException");
 
@@ -4150,7 +4606,7 @@ public class CFGBuilder {
         @Override
         public Node visitInstanceOf(InstanceOfTree tree, Void p) {
             Node operand = scan(tree.getExpression(), p);
-            TypeMirror refType = InternalUtils.typeOf(tree.getType());
+            TypeMirror refType = TreeUtils.typeOf(tree.getType());
             InstanceOfNode node = new InstanceOfNode(tree, operand, refType, types);
             extendWithNode(node);
             return node;
@@ -4198,91 +4654,56 @@ public class CFGBuilder {
 
                 case POSTFIX_DECREMENT:
                 case POSTFIX_INCREMENT:
-                    {
-                        ExpressionTree exprTree = tree.getExpression();
-                        TypeMirror exprType = InternalUtils.typeOf(exprTree);
-                        TypeMirror oneType = types.getPrimitiveType(TypeKind.INT);
-                        Node expr = scan(exprTree, p);
-
-                        TypeMirror promotedType = binaryPromotedType(exprType, oneType);
-
-                        LiteralTree oneTree = treeBuilder.buildLiteral(Integer.valueOf(1));
-                        handleArtificialTree(oneTree);
-
-                        Node exprRHS = binaryNumericPromotion(expr, promotedType);
-                        Node one = new IntegerLiteralNode(oneTree);
-                        one.setInSource(false);
-                        extendWithNode(one);
-                        one = binaryNumericPromotion(one, promotedType);
-
-                        BinaryTree operTree =
-                                treeBuilder.buildBinary(
-                                        promotedType,
-                                        (kind == Tree.Kind.POSTFIX_INCREMENT
-                                                ? Tree.Kind.PLUS
-                                                : Tree.Kind.MINUS),
-                                        exprTree,
-                                        oneTree);
-                        handleArtificialTree(operTree);
-                        Node operNode;
-                        if (kind == Tree.Kind.POSTFIX_INCREMENT) {
-                            operNode = new NumericalAdditionNode(operTree, exprRHS, one);
-                        } else {
-                            assert kind == Tree.Kind.POSTFIX_DECREMENT;
-                            operNode = new NumericalSubtractionNode(operTree, exprRHS, one);
-                        }
-                        extendWithNode(operNode);
-
-                        Node narrowed = narrowAndBox(operNode, exprType);
-                        // TODO: By using the assignment as the result of the expression, we
-                        // act like a pre-increment/decrement.  Fix this by saving the initial
-                        // value of the expression in a temporary.
-                        AssignmentNode assignNode = new AssignmentNode(tree, expr, narrowed);
-                        extendWithNode(assignNode);
-                        result = assignNode;
-                        break;
-                    }
                 case PREFIX_DECREMENT:
                 case PREFIX_INCREMENT:
                     {
                         ExpressionTree exprTree = tree.getExpression();
-                        TypeMirror exprType = InternalUtils.typeOf(exprTree);
-                        TypeMirror oneType = types.getPrimitiveType(TypeKind.INT);
                         Node expr = scan(exprTree, p);
 
-                        TypeMirror promotedType = binaryPromotedType(exprType, oneType);
+                        boolean isIncrement =
+                                kind == Tree.Kind.POSTFIX_INCREMENT
+                                        || kind == Kind.PREFIX_INCREMENT;
+                        boolean isPostfix =
+                                kind == Tree.Kind.POSTFIX_INCREMENT
+                                        || kind == Kind.POSTFIX_DECREMENT;
+                        AssignmentNode unaryAssign =
+                                createIncrementOrDecrementAssign(
+                                        isPostfix ? null : tree, expr, isIncrement);
+                        addToUnaryAssignLookupMap(tree, unaryAssign);
 
-                        LiteralTree oneTree = treeBuilder.buildLiteral(Integer.valueOf(1));
-                        handleArtificialTree(oneTree);
+                        if (isPostfix) {
+                            TypeMirror exprType = TreeUtils.typeOf(exprTree);
+                            VariableTree tempVarDecl =
+                                    treeBuilder.buildVariableDecl(
+                                            exprType,
+                                            uniqueName("tempPostfix"),
+                                            findOwner(),
+                                            tree.getExpression());
+                            handleArtificialTree(tempVarDecl);
+                            VariableDeclarationNode tempVarDeclNode =
+                                    new VariableDeclarationNode(tempVarDecl);
+                            tempVarDeclNode.setInSource(false);
+                            extendWithNode(tempVarDeclNode);
 
-                        Node exprRHS = binaryNumericPromotion(expr, promotedType);
-                        Node one = new IntegerLiteralNode(oneTree);
-                        one.setInSource(false);
-                        extendWithNode(one);
-                        one = binaryNumericPromotion(one, promotedType);
+                            Tree tempVar = treeBuilder.buildVariableUse(tempVarDecl);
+                            handleArtificialTree(tempVar);
+                            Node tempVarNode = new LocalVariableNode(tempVar);
+                            tempVarNode.setInSource(false);
+                            extendWithNode(tempVarNode);
 
-                        BinaryTree operTree =
-                                treeBuilder.buildBinary(
-                                        promotedType,
-                                        (kind == Tree.Kind.PREFIX_INCREMENT
-                                                ? Tree.Kind.PLUS
-                                                : Tree.Kind.MINUS),
-                                        exprTree,
-                                        oneTree);
-                        handleArtificialTree(operTree);
-                        Node operNode;
-                        if (kind == Tree.Kind.PREFIX_INCREMENT) {
-                            operNode = new NumericalAdditionNode(operTree, exprRHS, one);
+                            AssignmentNode tempAssignNode =
+                                    new AssignmentNode(tree, tempVarNode, expr);
+                            tempAssignNode.setInSource(false);
+                            extendWithNode(tempAssignNode);
+
+                            Tree resultExpr = treeBuilder.buildVariableUse(tempVarDecl);
+                            handleArtificialTree(resultExpr);
+                            result = new LocalVariableNode(resultExpr);
+                            result.setInSource(false);
+                            extendWithNode(result);
                         } else {
-                            assert kind == Tree.Kind.PREFIX_DECREMENT;
-                            operNode = new NumericalSubtractionNode(operTree, exprRHS, one);
+                            result = unaryAssign;
                         }
-                        extendWithNode(operNode);
-
-                        Node narrowed = narrowAndBox(operNode, exprType);
-                        AssignmentNode assignNode = new AssignmentNode(tree, expr, narrowed);
-                        extendWithNode(assignNode);
-                        result = assignNode;
                         break;
                     }
 
@@ -4299,6 +4720,60 @@ public class CFGBuilder {
             }
 
             return result;
+        }
+
+        /**
+         * Create assignment node which represent increment or decrement.
+         *
+         * @param target Target tree for assignment node. If it's null, corresponding assignment
+         *     tree will be generated.
+         * @param expr Expression node to be incremented or decremented
+         * @param isIncrement True when it's increment
+         * @return Assignment node for corresponding increment or decrement
+         */
+        private AssignmentNode createIncrementOrDecrementAssign(
+                Tree target, Node expr, boolean isIncrement) {
+            ExpressionTree exprTree = (ExpressionTree) expr.getTree();
+            TypeMirror exprType = expr.getType();
+            TypeMirror oneType = types.getPrimitiveType(TypeKind.INT);
+            TypeMirror promotedType = binaryPromotedType(exprType, oneType);
+
+            LiteralTree oneTree = treeBuilder.buildLiteral(Integer.valueOf(1));
+            handleArtificialTree(oneTree);
+
+            Node exprRHS = binaryNumericPromotion(expr, promotedType);
+            Node one = new IntegerLiteralNode(oneTree);
+            one.setInSource(false);
+            extendWithNode(one);
+            one = binaryNumericPromotion(one, promotedType);
+
+            BinaryTree operTree =
+                    treeBuilder.buildBinary(
+                            promotedType,
+                            isIncrement ? Tree.Kind.PLUS : Tree.Kind.MINUS,
+                            exprTree,
+                            oneTree);
+            handleArtificialTree(operTree);
+
+            Node operNode;
+            if (isIncrement) {
+                operNode = new NumericalAdditionNode(operTree, exprRHS, one);
+            } else {
+                operNode = new NumericalSubtractionNode(operTree, exprRHS, one);
+            }
+            operNode.setInSource(false);
+            extendWithNode(operNode);
+
+            Node narrowed = narrowAndBox(operNode, exprType);
+
+            if (target == null) {
+                target = treeBuilder.buildAssignment(exprTree, (ExpressionTree) narrowed.getTree());
+                handleArtificialTree(target);
+            }
+
+            AssignmentNode assignNode = new AssignmentNode(target, expr, narrowed);
+            assignNode.setInSource(false);
+            return extendWithNode(assignNode);
         }
 
         @Override
@@ -4359,11 +4834,11 @@ public class CFGBuilder {
                 conditionStart = new Label();
             }
 
-            Label oldBreakTargetL = breakTargetL;
-            breakTargetL = loopExit;
+            TryFinallyScopeCell oldBreakTargetL = breakTargetL;
+            breakTargetL = new TryFinallyScopeCell(loopExit);
 
-            Label oldContinueTargetL = continueTargetL;
-            continueTargetL = conditionStart;
+            TryFinallyScopeCell oldContinueTargetL = continueTargetL;
+            continueTargetL = new TryFinallyScopeCell(conditionStart);
 
             // Condition
             addLabelForNextNode(conditionStart);

@@ -35,19 +35,15 @@ import org.checkerframework.javacutil.AnnotationUtils;
  */
 public class SameLenTransfer extends CFTransfer {
 
-    // The ATF (Annotated Type Factory).
     private SameLenAnnotatedTypeFactory aTypeFactory;
 
-    /** Shorthand for SameLenUnknown.class. */
+    /** Shorthand for aTypeFactory.UNKNOWN. */
     private AnnotationMirror UNKNOWN;
-
-    private CFAnalysis analysis;
 
     public SameLenTransfer(CFAnalysis analysis) {
         super(analysis);
-        this.analysis = analysis;
-        aTypeFactory = (SameLenAnnotatedTypeFactory) analysis.getTypeFactory();
-        UNKNOWN = aTypeFactory.UNKNOWN;
+        this.aTypeFactory = (SameLenAnnotatedTypeFactory) analysis.getTypeFactory();
+        this.UNKNOWN = aTypeFactory.UNKNOWN;
     }
 
     /**
@@ -59,7 +55,7 @@ public class SameLenTransfer extends CFTransfer {
             // lengthNode is a.length
             FieldAccessNode lengthFieldAccessNode = (FieldAccessNode) lengthNode;
             return lengthFieldAccessNode.getReceiver();
-        } else if (aTypeFactory.getMethodIdentifier().isStringLengthInvocation(lengthNode)) {
+        } else if (aTypeFactory.getMethodIdentifier().isLengthOfMethodInvocation(lengthNode)) {
             // lengthNode is s.length()
             MethodInvocationNode lengthMethodInvocationNode = (MethodInvocationNode) lengthNode;
             return lengthMethodInvocationNode.getTarget().getReceiver();
@@ -81,8 +77,9 @@ public class SameLenTransfer extends CFTransfer {
                 Node lengthNodeReceiver = getLengthNodeReceiver(lengthNode);
 
                 if (lengthNodeReceiver != null) {
-                    // "new T[a.length]" or "new T[s.length()]" is the right hand side of the assignment.
-                    // lengthNode is known to be "lengthNodeReceiver.length" or "lengthNodeReceiver.length()"
+                    // "new T[a.length]" or "new T[s.length()]" is the right hand side of the
+                    // assignment.  lengthNode is known to be "lengthNodeReceiver.length" or
+                    // "lengthNodeReceiver.length()"
 
                     // targetRec is the receiver for the left hand side of the assignment.
                     Receiver targetRec =
@@ -112,8 +109,8 @@ public class SameLenTransfer extends CFTransfer {
                         .getAnnotatedType(node.getExpression().getTree())
                         .getAnnotationInHierarchy(UNKNOWN);
 
-        // If the left side of the assignment is an array or a string, then have both the right and left side be SameLen
-        // of each other.
+        // If the left side of the assignment is an array or a string, then have both the right and
+        // left side be SameLen of each other.
 
         Receiver targetRec =
                 FlowExpressions.internalReprOf(analysis.getTypeFactory(), node.getTarget());
@@ -235,7 +232,8 @@ public class SameLenTransfer extends CFTransfer {
         Node secondLengthReceiver = getLengthNodeReceiver(secondNode);
 
         if (firstLengthReceiver != null && secondLengthReceiver != null) {
-            // Refinement in the else store if this is a.length == b.length (or length() in case of strings).
+            // Refinement in the else store if this is a.length == b.length (or length() in case of
+            // strings).
             refineEq(firstLengthReceiver, secondLengthReceiver, equalStore);
         } else if (IndexUtil.isSequenceType(firstNode.getType())
                 || IndexUtil.isSequenceType(secondNode.getType())) {

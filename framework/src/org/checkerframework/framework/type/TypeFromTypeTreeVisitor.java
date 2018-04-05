@@ -17,7 +17,6 @@ import com.sun.source.tree.UnionTypeTree;
 import com.sun.source.tree.WildcardTree;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import javax.lang.model.element.AnnotationMirror;
@@ -32,9 +31,9 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedDeclared
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedIntersectionType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedTypeVariable;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedWildcardType;
-import org.checkerframework.framework.type.visitor.AnnotatedTypeMerger;
 import org.checkerframework.javacutil.ErrorReporter;
-import org.checkerframework.javacutil.InternalUtils;
+import org.checkerframework.javacutil.TreeUtils;
+import org.checkerframework.javacutil.TypesUtils;
 
 /**
  * Converts type trees into AnnotatedTypeMirrors
@@ -51,7 +50,7 @@ class TypeFromTypeTreeVisitor extends TypeFromTreeVisitor {
         if (type == null) // e.g., for receiver type
         type = f.toAnnotatedType(f.types.getNoType(TypeKind.NONE), false);
         assert AnnotatedTypeFactory.validAnnotatedType(type);
-        List<? extends AnnotationMirror> annos = InternalUtils.annotationsFromTree(node);
+        List<? extends AnnotationMirror> annos = TreeUtils.annotationsFromTree(node);
 
         if (type.getKind() == TypeKind.WILDCARD) {
             final ExpressionTree underlyingTree = node.getUnderlyingType();
@@ -92,7 +91,7 @@ class TypeFromTypeTreeVisitor extends TypeFromTreeVisitor {
     public AnnotatedTypeMirror visitParameterizedType(
             ParameterizedTypeTree node, AnnotatedTypeFactory f) {
 
-        List<AnnotatedTypeMirror> args = new LinkedList<AnnotatedTypeMirror>();
+        List<AnnotatedTypeMirror> args = new ArrayList<>(node.getTypeArguments().size());
         for (Tree t : node.getTypeArguments()) {
             args.add(visit(t, f));
         }
@@ -117,7 +116,7 @@ class TypeFromTypeTreeVisitor extends TypeFromTreeVisitor {
     @Override
     public AnnotatedTypeMirror visitTypeParameter(TypeParameterTree node, AnnotatedTypeFactory f) {
 
-        List<AnnotatedTypeMirror> bounds = new LinkedList<AnnotatedTypeMirror>();
+        List<AnnotatedTypeMirror> bounds = new ArrayList<>(node.getBounds().size());
         for (Tree t : node.getBounds()) {
             AnnotatedTypeMirror bound;
             if (visitedBounds.containsKey(t) && f == visitedBounds.get(t).atypeFactory) {
@@ -131,16 +130,14 @@ class TypeFromTypeTreeVisitor extends TypeFromTreeVisitor {
         }
 
         AnnotatedTypeVariable result = (AnnotatedTypeVariable) f.type(node);
-        List<? extends AnnotationMirror> annotations = InternalUtils.annotationsFromTree(node);
+        List<? extends AnnotationMirror> annotations = TreeUtils.annotationsFromTree(node);
         result.getLowerBound().addAnnotations(annotations);
 
         switch (bounds.size()) {
             case 0:
                 break;
             case 1:
-                // the first call to result.getUpperBound will appropriately initialize the bound
-                // rather than replace it, copy the bounds from bounds.get(0) to the initialized bound
-                AnnotatedTypeMerger.merge(bounds.get(0), result.getUpperBound());
+                result.setUpperBound(bounds.get(0));
                 break;
             default:
                 AnnotatedIntersectionType upperBound =
@@ -217,13 +214,14 @@ class TypeFromTypeTreeVisitor extends TypeFromTreeVisitor {
                 ((AnnotatedTypeVariable) result).setDeclaration(false);
                 return result;
             } else {
-                // ErrorReporter.errorAbort("TypeFromTree.forTypeVariable: did not find source for: " + elt);
+                // ErrorReporter.errorAbort("TypeFromTree.forTypeVariable: did not find source for:
+                // " + elt);
                 return type;
             }
         } else {
             // Captured types can have a generic element (owner) that is
             // not an element at all, namely Symtab.noSymbol.
-            if (InternalUtils.isCaptured(typeVar)) {
+            if (TypesUtils.isCaptured(typeVar)) {
                 return type;
             } else {
                 ErrorReporter.errorAbort(
