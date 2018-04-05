@@ -607,8 +607,7 @@ public abstract class InitializationAnnotatedTypeFactory<
                 // The receiver is not initialized for this frame and the type being computed is not
                 // a LHS.
                 // Replace all annotations with the top annotation for that hierarchy.
-                type.clearAnnotations();
-                type.addAnnotations(qualHierarchy.getTopAnnotations());
+                type.replaceAnnotation(qualHierarchy.getTopAnnotation(COMMITTED));
             }
 
             if (!AnnotationUtils.containsSame(declaredFieldAnnotations, NOT_ONLY_COMMITTED)

@@ -149,7 +149,13 @@ public class TypeArgInferenceUtil {
                 AnnotatedExecutableType declMethodType = atypeFactory.getAnnotatedType(methodElt);
                 return declMethodType.getReceiverType();
             } // Removing above if block causes StackOverflowException via getReceiverType -> assignedTo -> getReceiverType loop!
-            AnnotatedTypeMirror receiver = atypeFactory.getReceiverType(methodInvocation);
+            AnnotatedTypeMirror receiver = null;
+            try {
+                receiver = atypeFactory.getReceiverType(methodInvocation);
+            } catch (Throwable e) {
+                new Object();
+            }
+
             res =
                     assignedToExecutable(
                             atypeFactory,

@@ -369,7 +369,11 @@ public abstract class ViewpointAdapter<T> {
         int foundindex = 0;
 
         for (TypeParameterElement tparam : tparams) {
-            if (tparam.equals(varelem) || tparam.getSimpleName().equals(varelem.getSimpleName())) {
+            if (tparam.equals(varelem)
+                    || (tparam.getSimpleName().equals(varelem.getSimpleName())
+                            && tparam.getEnclosingElement()
+                                    .toString()
+                                    .equals(varelem.getEnclosingElement().toString()))) {
                 // we found the right index!
                 break;
             }

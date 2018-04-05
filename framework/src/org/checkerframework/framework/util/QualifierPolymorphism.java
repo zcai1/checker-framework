@@ -3,7 +3,6 @@ package org.checkerframework.framework.util;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.Tree;
-import com.sun.source.util.TreePath;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,7 +34,6 @@ import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedWildcard
 import org.checkerframework.framework.type.QualifierHierarchy;
 import org.checkerframework.framework.type.visitor.AnnotatedTypeScanner;
 import org.checkerframework.framework.type.visitor.SimpleAnnotatedTypeVisitor;
-import org.checkerframework.framework.util.typeinference.TypeArgInferenceUtil;
 import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.ErrorReporter;
@@ -218,20 +216,20 @@ public class QualifierPolymorphism {
                                     atypeFactory.getReceiverType(tree), type.getReceiverType()));
         }
 
-        TreePath path = atypeFactory.getPath(tree);
-        if (path != null) {
-            AnnotatedTypeMirror assignmentContext = null;
-            assignmentContext = TypeArgInferenceUtil.assignedTo(atypeFactory, path);
-
-            if (assignmentContext != null) {
-                matchingMapping =
-                        collector.reduce2(
-                                matchingMapping,
-                                collector.visit(
-                                        // Actual assignment lhs type
-                                        type.getReturnType(), assignmentContext));
-            }
-        }
+        //        TreePath path = atypeFactory.getPath(tree);
+        //        if (path != null) {
+        //            AnnotatedTypeMirror assignmentContext = null;
+        //            assignmentContext = TypeArgInferenceUtil.assignedTo(atypeFactory, path);
+        //
+        //            if (assignmentContext != null) {
+        //                matchingMapping =
+        //                        collector.reduce2(
+        //                                matchingMapping,
+        //                                collector.visit(
+        //                                        // Actual assignment lhs type
+        //                                        type.getReturnType(), assignmentContext));
+        //            }
+        //        }
 
         if (matchingMapping != null && !matchingMapping.isEmpty()) {
             replacer.visit(type, matchingMapping);
