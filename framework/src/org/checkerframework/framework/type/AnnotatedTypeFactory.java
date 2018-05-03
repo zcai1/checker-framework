@@ -1331,7 +1331,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @param element the element of the field or method
      */
     public void postAsMemberOf(
-            AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element, Tree tree) {
+            AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element) {
         if (element.getKind() == ElementKind.FIELD) {
             addAnnotationFromFieldInvariant(type, owner, (VariableElement) element);
         }
@@ -2046,7 +2046,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             ExpressionTree tree, ExecutableElement methodElt, AnnotatedTypeMirror receiverType) {
 
         AnnotatedExecutableType methodType =
-                AnnotatedTypes.asMemberOf(types, this, receiverType, methodElt, tree);
+                AnnotatedTypes.asMemberOf(types, this, receiverType, methodElt);
 
         if (!ElementUtils.isStatic(methodElt)) {
             viewpointAdaptMethod(methodElt, receiverType, methodType);
@@ -2216,7 +2216,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         ExecutableElement ctor = TreeUtils.constructor(tree);
         AnnotatedTypeMirror type = fromNewClass(tree);
         addComputedTypeAnnotations(tree.getIdentifier(), type);
-        AnnotatedExecutableType con = AnnotatedTypes.asMemberOf(types, this, type, ctor, tree);
+        AnnotatedExecutableType con = AnnotatedTypes.asMemberOf(types, this, type, ctor);
 
         if (tree.getArguments().size() == con.getParameterTypes().size() + 1
                 && isSyntheticArgument(tree.getArguments().get(0))) {
@@ -3595,8 +3595,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         // The method viewed from the declared type
         AnnotatedExecutableType methodExe =
                 (AnnotatedExecutableType)
-                        AnnotatedTypes.asMemberOf(
-                                types, this, functionalInterfaceType, fnElement, tree);
+                        AnnotatedTypes.asMemberOf(types, this, functionalInterfaceType, fnElement);
 
         return Pair.of(functionalInterfaceType, methodExe);
     }
