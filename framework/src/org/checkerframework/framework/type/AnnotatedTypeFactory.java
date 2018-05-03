@@ -705,6 +705,11 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         return typeArgumentInference;
     }
 
+    /** Factory method to create ViewpointAdaptor. */
+    protected ViewpointAdapter<?> createViewpointAdapter() {
+        return null;
+    }
+
     /**
      * Returns a mutable set of annotation classes that are supported by a checker
      *
@@ -1336,17 +1341,30 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             addAnnotationFromFieldInvariant(type, owner, (VariableElement) element);
         }
         addComputedTypeAnnotations(element, type);
-        viewpointAdaptMember(type, owner, element);
+        if (shouldViewpointAdaptMember(type, element)) {
+            viewpointAdaptMember(type, owner, element);
+        }
+    }
+
+    protected boolean shouldViewpointAdaptMember(AnnotatedTypeMirror type, Element element) {
+        if (!(type.getKind() == TypeKind.DECLARED || type.getKind() == TypeKind.ARRAY)) {
+            return false;
+        }
+
+        if (element.getKind() == ElementKind.LOCAL_VARIABLE
+                || element.getKind() == ElementKind.PARAMETER) {
+            return false;
+        }
+        return true;
     }
 
     protected void viewpointAdaptMember(
             AnnotatedTypeMirror type, AnnotatedTypeMirror owner, Element element) {
-        if (viewpointAdapter != null && viewpointAdapter.shouldAdaptMember(type, element)) {
+        if (viewpointAdapter != null) {
             AnnotatedTypeMirror decltype = this.getAnnotatedType(element);
             AnnotatedTypeMirror combinedType =
                     this.viewpointAdapter.combineTypeWithType(owner, decltype, this);
-            // Update: we don't have a method to do this job. I think we need to add this logic.
-            type.replaceAnnotation(viewpointAdapter.getAnnotationMirror(combinedType, this));
+            type.replaceAnnotations(combinedType.getAnnotations());
             if (type.getKind() == TypeKind.DECLARED
                     && combinedType.getKind() == TypeKind.DECLARED) {
                 AnnotatedDeclaredType adtType = (AnnotatedDeclaredType) type;
@@ -3878,14 +3896,5 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     /** Accessor for the {@link CFContext}. */
     public CFContext getContext() {
         return checker;
-    }
-
-    /** Factory method to create ViewpointAdaptor. */
-    protected ViewpointAdapter<?> createViewpointAdapter() {
-        return null;
-    }
-
-    public ViewpointAdapter<?> getViewpointAdapter() {
-        return viewpointAdapter;
     }
 }
