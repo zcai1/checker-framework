@@ -1,8 +1,5 @@
 package org.checkerframework.framework.type;
 
-import static org.checkerframework.framework.util.AnnotatedTypes.isDeclarationOfJavaLangEnum;
-import static org.checkerframework.framework.util.AnnotatedTypes.isEnum;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -976,6 +973,16 @@ public class DefaultTypeHierarchy extends AbstractAtmComboVisitor<Boolean, Void>
         if (supertype.getKind() == TypeKind.DECLARED
                 && TypesUtils.getTypeElement(supertype.getUnderlyingType()).getKind()
                         == ElementKind.INTERFACE) {
+            // Make sure the upper bound is no wildcard or type variable
+            while (upperBound.getKind() == TypeKind.TYPEVAR
+                    || upperBound.getKind() == TypeKind.WILDCARD) {
+                if (upperBound.getKind() == TypeKind.TYPEVAR) {
+                    upperBound = ((AnnotatedTypeVariable) upperBound).getUpperBound();
+                }
+                if (upperBound.getKind() == TypeKind.WILDCARD) {
+                    upperBound = ((AnnotatedWildcardType) upperBound).getExtendsBound();
+                }
+            }
             // If the supertype is an interface, only compare the primary annotations.
             // The actual type argument could implement the interface and the bound of
             // the type variable must not implement the interface.
@@ -1087,8 +1094,8 @@ public class DefaultTypeHierarchy extends AbstractAtmComboVisitor<Boolean, Void>
         // asSuper should return:
         // @1 Enum<E extends @2 Enum<E>>
         if (asSuperType != null
-                && isEnum(asSuperType)
-                && isDeclarationOfJavaLangEnum(types, elements, supertype)) {
+                && AnnotatedTypes.isEnum(asSuperType)
+                && AnnotatedTypes.isDeclarationOfJavaLangEnum(types, elements, supertype)) {
             final AnnotatedDeclaredType resultAtd = ((AnnotatedDeclaredType) supertype).deepCopy();
             resultAtd.clearAnnotations();
             resultAtd.addAnnotations(asSuperType.getAnnotations());

@@ -3,7 +3,6 @@ package org.checkerframework.framework.type;
 // The imports from com.sun, but they are all
 // @jdk.Exported and therefore somewhat safe to use.
 // Try to avoid using non-@jdk.Exported classes.
-
 import com.sun.source.tree.AnnotationTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.ClassTree;
@@ -104,12 +103,13 @@ import org.checkerframework.framework.util.typeinference.TypeArgumentInference;
 import org.checkerframework.javacutil.AnnotationBuilder;
 import org.checkerframework.javacutil.AnnotationProvider;
 import org.checkerframework.javacutil.AnnotationUtils;
+import org.checkerframework.javacutil.BugInCF;
 import org.checkerframework.javacutil.CollectionUtils;
 import org.checkerframework.javacutil.ElementUtils;
-import org.checkerframework.javacutil.ErrorReporter;
 import org.checkerframework.javacutil.Pair;
 import org.checkerframework.javacutil.TreeUtils;
 import org.checkerframework.javacutil.TypesUtils;
+import org.checkerframework.javacutil.UserError;
 import org.checkerframework.javacutil.trees.DetachedVarSymbol;
 
 /**
@@ -434,7 +434,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                     buf.append(otherElementTypes.get(i));
                 }
                 buf.append(".");
-                ErrorReporter.errorAbort(buf.toString());
+                throw new BugInCF(buf.toString());
             }
             // Check for PolyAll
             if (annotationClass.equals(PolyAll.class)) {
@@ -445,7 +445,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         }
 
         if (hasPolyAll && !hasPolymorphicQualifier) {
-            ErrorReporter.errorAbort(
+            throw new BugInCF(
                     "Checker added @PolyAll to list of supported qualifiers, but "
                             + "the checker does not have a polymorphic qualifier.  Either remove "
                             + "@PolyAll from the list of supported qualifiers or add a polymorphic "
@@ -457,15 +457,16 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * This method is called only when {@code -Ainfer} is passed as an option. It checks if another
      * option that should not occur simultaneously with the whole-program inference is also passed
      * as argument, and aborts the process if that is the case. For example, the whole-program
-     * inference process was not designed to work with unchecked code defaults. (Subclasses may
-     * override this method to add more options.)
+     * inference process was not designed to work with unchecked code defaults.
+     *
+     * <p>Subclasses may override this method to add more options.
      */
     protected void checkInvalidOptionsInferSignatures() {
         // See Issue 683
         // https://github.com/typetools/checker-framework/issues/683
         if (checker.useUncheckedCodeDefault("source")
                 || checker.useUncheckedCodeDefault("bytecode")) {
-            ErrorReporter.errorAbort(
+            throw new UserError(
                     "The option -Ainfer cannot be"
                             + " used together with unchecked code defaults.");
         }
@@ -479,8 +480,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     protected void postInit() {
         this.qualHierarchy = createQualifierHierarchy();
         if (qualHierarchy == null) {
-            ErrorReporter.errorAbort(
-                    "AnnotatedTypeFactory with null qualifier hierarchy not supported.");
+            throw new BugInCF("AnnotatedTypeFactory with null qualifier hierarchy not supported.");
         }
         this.typeHierarchy = createTypeHierarchy();
         this.typeVarSubstitutor = createTypeVariableSubstitutor();
@@ -613,8 +613,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         for (Class<? extends Annotation> typeQualifier : supportedTypeQualifiers) {
             AnnotationMirror typeQualifierAnno =
                     AnnotationBuilder.fromClass(elements, typeQualifier);
-            assert typeQualifierAnno != null
-                    : "Loading annotation \"" + typeQualifier + "\" failed!";
+            if (typeQualifierAnno == null) {
+                throw new BugInCF("Cannot load annotation " + typeQualifier);
+            }
             factory.addQualifier(typeQualifierAnno);
             // Polymorphic qualifiers can't declare their supertypes.
             // An error is raised if one is present.
@@ -622,7 +623,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                 if (typeQualifier.getAnnotation(SubtypeOf.class) != null) {
                     // This is currently not supported. At some point we might add
                     // polymorphic qualifiers with upper and lower bounds.
-                    ErrorReporter.errorAbort(
+                    throw new BugInCF(
                             "AnnotatedTypeFactory: "
                                     + typeQualifier
                                     + " is polymorphic and specifies super qualifiers. "
@@ -631,7 +632,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                 continue;
             }
             if (typeQualifier.getAnnotation(SubtypeOf.class) == null) {
-                ErrorReporter.errorAbort(
+                throw new BugInCF(
                         "AnnotatedTypeFactory: "
                                 + typeQualifier
                                 + " does not specify its super qualifiers. "
@@ -651,7 +652,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         QualifierHierarchy hierarchy = factory.build();
 
         if (!hierarchy.isValid()) {
-            ErrorReporter.errorAbort(
+            throw new BugInCF(
                     "AnnotatedTypeFactory: invalid qualifier hierarchy: "
                             + hierarchy.getClass()
                             + " "
@@ -963,8 +964,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         try {
             return Integer.valueOf(option);
         } catch (NumberFormatException ex) {
-            ErrorReporter.errorAbort("atfCacheSize was not an integer: " + option);
-            return 0; // dead code
+            throw new UserError("atfCacheSize was not an integer: " + option);
         }
     }
 
@@ -976,8 +976,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      */
     public AnnotatedTypeMirror getAnnotatedType(Element elt) {
         if (elt == null) {
-            ErrorReporter.errorAbort("AnnotatedTypeFactory.getAnnotatedType: null element");
-            return null; // dead code
+            throw new BugInCF("AnnotatedTypeFactory.getAnnotatedType: null element");
         }
         // Annotations explicitly written in the source code,
         // or obtained from bytecode.
@@ -1008,8 +1007,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      */
     public AnnotatedTypeMirror getAnnotatedType(Tree tree) {
         if (tree == null) {
-            ErrorReporter.errorAbort("AnnotatedTypeFactory.getAnnotatedType: null tree");
-            return null; // dead code
+            throw new BugInCF("AnnotatedTypeFactory.getAnnotatedType: null tree");
         }
         if (shouldCache && classAndMethodTreeCache.containsKey(tree)) {
             return classAndMethodTreeCache.get(tree).deepCopy();
@@ -1024,10 +1022,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             tree = TreeUtils.skipParens((ExpressionTree) tree);
             type = fromExpression((ExpressionTree) tree);
         } else {
-            ErrorReporter.errorAbort(
+            throw new BugInCF(
                     "AnnotatedTypeFactory.getAnnotatedType: query of annotated type for tree "
                             + tree.getKind());
-            type = null; // dead code
         }
 
         addComputedTypeAnnotations(tree, type);
@@ -1086,9 +1083,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      */
     public AnnotatedTypeMirror getAnnotatedTypeFromTypeTree(Tree tree) {
         if (tree == null) {
-            ErrorReporter.errorAbort(
-                    "AnnotatedTypeFactory.getAnnotatedTypeFromTypeTree: null tree");
-            return null; // dead code
+            throw new BugInCF("AnnotatedTypeFactory.getAnnotatedTypeFromTypeTree: null tree");
         }
         AnnotatedTypeMirror type = fromTypeTree(tree);
         addComputedTypeAnnotations(tree, type);
@@ -1142,12 +1137,11 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         } else if (decl.getKind() == Tree.Kind.TYPE_PARAMETER) {
             type = fromTypeTree(decl);
         } else {
-            ErrorReporter.errorAbort(
-                    "AnnotatedTypeFactory.fromElement: cannot be here! decl: "
+            throw new BugInCF(
+                    "AnnotatedTypeFactory.fromElement: cannot be here. decl: "
                             + decl.getKind()
                             + " elt: "
                             + elt);
-            type = null; // dead code
         }
 
         // Caching is disabled if typesFromStubFiles == null, because calls to this
@@ -1212,10 +1206,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      */
     private final AnnotatedTypeMirror fromMember(Tree tree) {
         if (!(tree instanceof MethodTree || tree instanceof VariableTree)) {
-            ErrorReporter.errorAbort(
+            throw new BugInCF(
                     "AnnotatedTypeFactory.fromMember: not a method or variable declaration: "
                             + tree);
-            return null; // dead code
         }
         if (shouldCache && fromMemberTreeCache.containsKey(tree)) {
             return fromMemberTreeCache.get(tree).deepCopy();
@@ -1747,7 +1740,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                 }
                 TypeElement typeElt = ElementUtils.enclosingClass(element);
                 if (typeElt == null) {
-                    ErrorReporter.errorAbort(
+                    throw new BugInCF(
                             "AnnotatedTypeFactory.getImplicitReceiver: enclosingClass()==null for element: "
                                     + element);
                 }
@@ -1771,7 +1764,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         TypeElement typeElt = ElementUtils.enclosingClass(rcvelem);
         if (typeElt == null) {
-            ErrorReporter.errorAbort(
+            throw new BugInCF(
                     "AnnotatedTypeFactory.getImplicitReceiver: enclosingClass()==null for element: "
                             + rcvelem);
         }
@@ -1982,6 +1975,20 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         }
     }
 
+    /** The type for an instantiated generic method. */
+    public static class ParameterizedMethodType {
+        /** The method's type. */
+        public final AnnotatedExecutableType methodType;
+        /** The types of the generic type arguments. */
+        public final List<AnnotatedTypeMirror> typeArgs;
+        /** Create a ParameterizedMethodType. */
+        public ParameterizedMethodType(
+                AnnotatedExecutableType methodType, List<AnnotatedTypeMirror> typeArgs) {
+            this.methodType = methodType;
+            this.typeArgs = typeArgs;
+        }
+    }
+
     /**
      * Determines the type of the invoked method based on the passed method invocation tree.
      *
@@ -2008,19 +2015,17 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @param tree the method invocation tree
      * @return the method type being invoked with tree and the (inferred) type arguments
      */
-    public Pair<AnnotatedExecutableType, List<AnnotatedTypeMirror>> methodFromUse(
-            MethodInvocationTree tree) {
+    public ParameterizedMethodType methodFromUse(MethodInvocationTree tree) {
         ExecutableElement methodElt = TreeUtils.elementFromUse(tree);
         AnnotatedTypeMirror receiverType = getReceiverType(tree);
 
-        Pair<AnnotatedExecutableType, List<AnnotatedTypeMirror>> mfuPair =
-                methodFromUse(tree, methodElt, receiverType);
+        ParameterizedMethodType mType = methodFromUse(tree, methodElt, receiverType);
         if (checker.shouldResolveReflection()
                 && reflectionResolver.isReflectiveMethodInvocation(tree)) {
-            mfuPair = reflectionResolver.resolveReflectiveCall(this, tree, mfuPair);
+            mType = reflectionResolver.resolveReflectiveCall(this, tree, mType);
         }
 
-        AnnotatedExecutableType method = mfuPair.first;
+        AnnotatedExecutableType method = mType.methodType;
         if (method.getReturnType().getKind() == TypeKind.WILDCARD
                 && ((AnnotatedWildcardType) method.getReturnType()).isUninferredTypeArgument()) {
             // Get the correct Java type from the tree and use it as the upper bound of the
@@ -2040,10 +2045,10 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             addDefaultAnnotations(wildcard);
         }
 
-        return mfuPair;
+        return mType;
     }
 
-    public Pair<AnnotatedExecutableType, List<AnnotatedTypeMirror>> methodFromUse(
+    public ParameterizedMethodType methodFromUse(
             ExpressionTree tree, ExecutableElement methodElt, AnnotatedTypeMirror receiverType) {
 
         AnnotatedExecutableType methodType =
@@ -2059,9 +2064,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         if (!typeVarMapping.isEmpty()) {
             for (AnnotatedTypeVariable tv : methodType.getTypeVariables()) {
                 if (typeVarMapping.get(tv.getUnderlyingType()) == null) {
-                    ErrorReporter.errorAbort(
+                    throw new BugInCF(
                             "AnnotatedTypeFactory.methodFromUse:"
-                                    + "mismatch between declared method type variables and the inferred method type arguments! "
+                                    + "mismatch between declared method type variables and the inferred method type arguments. "
                                     + "Method type variables: "
                                     + methodType.getTypeVariables()
                                     + "; "
@@ -2080,7 +2085,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             adaptGetClassReturnTypeToReceiver(methodType, receiverType);
         }
 
-        return Pair.of(methodType, typeargs);
+        return new ParameterizedMethodType(methodType, typeargs);
     }
 
     /**
@@ -2108,7 +2113,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         if (returnType == null
                 || !(returnType.getKind() == TypeKind.DECLARED)
                 || ((AnnotatedDeclaredType) returnType).getTypeArguments().size() != 1) {
-            ErrorReporter.errorAbort(
+            throw new BugInCF(
                     "Unexpected type passed to AnnotatedTypes.adaptGetClassReturnTypeToReceiver\n"
                             + "getClassType="
                             + getClassType
@@ -2158,8 +2163,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @return the annotated type of the invoked constructor (as an executable type) and the
      *     (inferred) type arguments
      */
-    public Pair<AnnotatedExecutableType, List<AnnotatedTypeMirror>> constructorFromUse(
-            NewClassTree tree) {
+    public ParameterizedMethodType constructorFromUse(NewClassTree tree) {
         ExecutableElement ctor = TreeUtils.constructor(tree);
         AnnotatedTypeMirror type = fromNewClass(tree);
         addComputedTypeAnnotations(tree.getIdentifier(), type);
@@ -2189,7 +2193,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             con = (AnnotatedExecutableType) typeVarSubstitutor.substitute(typeVarMapping, con);
         }
 
-        return Pair.of(con, typeargs);
+        return new ParameterizedMethodType(con, typeargs);
     }
 
     /** Returns the return type of the method {@code m}. */
@@ -2316,7 +2320,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                     // type
                     // is never a suitable context anyways.
                 } else {
-                    ErrorReporter.errorAbort(
+                    throw new BugInCF(
                             "AnnotatedTypeFactory.fromNewClassContextHelper: unexpected context: "
                                     + ctxtype
                                     + " ("
@@ -2794,11 +2798,10 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         TreePath path = getPath(tree);
         if (path == null) {
-            ErrorReporter.errorAbort(
+            throw new BugInCF(
                     String.format(
                             "AnnotatedTypeFactory.getMostInnerClassOrMethod: getPath(tree)=>null%n  TreePath.getPath(root, tree)=>%s\n  for tree (%s) = %s%n  root=%s",
                             TreePath.getPath(root, tree), tree.getClass(), tree, root));
-            return null; // dead code
         }
         for (Tree pathTree : path) {
             if (pathTree instanceof MethodTree) {
@@ -2808,8 +2811,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             }
         }
 
-        ErrorReporter.errorAbort("AnnotatedTypeFactory.getMostInnerClassOrMethod: cannot be here!");
-        return null; // dead code
+        throw new BugInCF("AnnotatedTypeFactory.getMostInnerClassOrMethod: cannot be here");
     }
 
     private final Map<Tree, Element> pathHack = new HashMap<>();
@@ -2958,7 +2960,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      */
     protected void parseStubFiles() {
         if (this.typesFromStubFiles != null || this.declAnnosFromStubFiles != null) {
-            ErrorReporter.errorAbort("AnnotatedTypeFactory.parseStubFiles called more than once");
+            throw new BugInCF("AnnotatedTypeFactory.parseStubFiles called more than once");
         }
 
         Map<Element, AnnotatedTypeMirror> typesFromStubFiles = new HashMap<>();
@@ -3588,7 +3590,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                     }
                     // We should never reach here: isFunctionalInterface performs the same check
                     // and would have raised an error already.
-                    ErrorReporter.errorAbort(
+                    throw new BugInCF(
                             String.format(
                                     "Expected the type of a cast tree in an assignment context to contain a functional interface bound. "
                                             + "Found type: %s for tree: %s in lambda tree: %s",
@@ -3599,10 +3601,10 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             case NEW_CLASS:
                 NewClassTree newClass = (NewClassTree) parentTree;
                 int indexOfLambda = newClass.getArguments().indexOf(tree);
-                Pair<AnnotatedExecutableType, List<AnnotatedTypeMirror>> con =
-                        this.constructorFromUse(newClass);
+                ParameterizedMethodType con = this.constructorFromUse(newClass);
                 AnnotatedTypeMirror constructorParam =
-                        AnnotatedTypes.getAnnotatedTypeMirrorOfParameter(con.first, indexOfLambda);
+                        AnnotatedTypes.getAnnotatedTypeMirrorOfParameter(
+                                con.methodType, indexOfLambda);
                 assert isFunctionalInterface(
                         constructorParam.getUnderlyingType(), parentTree, tree);
                 return (AnnotatedDeclaredType) constructorParam;
@@ -3617,10 +3619,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             case METHOD_INVOCATION:
                 MethodInvocationTree method = (MethodInvocationTree) parentTree;
                 int index = method.getArguments().indexOf(tree);
-                Pair<AnnotatedExecutableType, List<AnnotatedTypeMirror>> exe =
-                        this.methodFromUse(method);
+                ParameterizedMethodType exe = this.methodFromUse(method);
                 AnnotatedTypeMirror param =
-                        AnnotatedTypes.getAnnotatedTypeMirrorOfParameter(exe.first, index);
+                        AnnotatedTypes.getAnnotatedTypeMirrorOfParameter(exe.methodType, index);
                 if (param.getKind() == TypeKind.WILDCARD) {
                     // param is an uninferred wildcard.
                     TypeMirror typeMirror = TreeUtils.typeOf(tree);
@@ -3693,13 +3694,12 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                 return (AnnotatedDeclaredType) conditionalType;
 
             default:
-                ErrorReporter.errorAbort(
+                throw new BugInCF(
                         "Could not find functional interface from assignment context. "
                                 + "Unexpected tree type: "
                                 + parentTree.getKind()
                                 + " For lambda tree: "
                                 + tree);
-                return null;
         }
     }
 
@@ -3721,12 +3721,11 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                     }
                 }
             }
-            ErrorReporter.errorAbort(
+            throw new BugInCF(
                     String.format(
                             "Expected the type of %s tree in assignment context to be a functional interface. "
                                     + "Found type: %s for tree: %s in lambda tree: %s",
                             contextTree.getKind(), type, contextTree, tree));
-            return false;
         }
         return true;
     }
