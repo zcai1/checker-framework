@@ -587,7 +587,14 @@ public abstract class GenericAnnotatedTypeFactory<
             DefaultFor defaultFor = qual.getAnnotation(DefaultFor.class);
             if (defaultFor != null) {
                 final TypeUseLocation[] locations = defaultFor.value();
-                defs.addCheckedCodeDefaults(AnnotationBuilder.fromClass(elements, qual), locations);
+                final org.checkerframework.framework.qual.TypeKind[] typeKinds = defaultFor.types();
+                if (typeKinds.length != 0) {
+                    defs.addCheckedCodeDefaults(
+                            AnnotationBuilder.fromClass(elements, qual), locations, typeKinds);
+                } else {
+                    defs.addCheckedCodeDefaults(
+                            AnnotationBuilder.fromClass(elements, qual), locations);
+                }
                 foundOtherwise =
                         foundOtherwise
                                 || Arrays.asList(locations).contains(TypeUseLocation.OTHERWISE);
@@ -604,6 +611,34 @@ public abstract class GenericAnnotatedTypeFactory<
         if (!foundOtherwise && this.isSupportedQualifier(unqualified)) {
             defs.addCheckedCodeDefault(unqualified, TypeUseLocation.OTHERWISE);
         }
+    }
+
+    protected void addCheckedCodeDefaultsTypeKind(QualifierDefaults defs) {
+        boolean foundOtherwise = false;
+        // Add defaults from @DefaultFor
+        for (Class<? extends Annotation> qual : getSupportedTypeQualifiers()) {
+            DefaultFor defaultFor = qual.getAnnotation(DefaultFor.class);
+            if (defaultFor != null) {
+                final TypeUseLocation[] locations = defaultFor.value();
+                final org.checkerframework.framework.qual.TypeKind[] typeKinds = defaultFor.types();
+                defs.addCheckedCodeDefaults(
+                        AnnotationBuilder.fromClass(elements, qual), locations, typeKinds);
+                foundOtherwise =
+                        foundOtherwise
+                                || Arrays.asList(locations).contains(TypeUseLocation.OTHERWISE);
+            }
+        }
+    }
+
+    /**
+     * Map between {@link org.checkerframework.framework.qual.TypeKind} and {@link
+     * javax.lang.model.type.TypeKind}.
+     *
+     * @param typeKind the Checker Framework TypeKind
+     * @return the javax TypeKind
+     */
+    private TypeKind mapTypeKinds(org.checkerframework.framework.qual.TypeKind typeKind) {
+        return TypeKind.valueOf(typeKind.name());
     }
 
     /**

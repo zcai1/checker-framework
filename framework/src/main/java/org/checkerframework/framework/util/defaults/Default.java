@@ -1,6 +1,7 @@
 package org.checkerframework.framework.util.defaults;
 
 import javax.lang.model.element.AnnotationMirror;
+import org.checkerframework.framework.qual.TypeKind;
 import org.checkerframework.framework.qual.TypeUseLocation;
 import org.checkerframework.javacutil.AnnotationUtils;
 
@@ -15,10 +16,19 @@ public class Default implements Comparable<Default> {
     // please remember to add any fields to the hashcode calculation
     public final AnnotationMirror anno;
     public final TypeUseLocation location;
+    public final TypeKind type;
 
     public Default(final AnnotationMirror anno, final TypeUseLocation location) {
         this.anno = anno;
         this.location = location;
+        this.type = null;
+    }
+
+    public Default(
+            final AnnotationMirror anno, final TypeUseLocation location, final TypeKind type) {
+        this.anno = anno;
+        this.location = location;
+        this.type = type;
     }
 
     @Override

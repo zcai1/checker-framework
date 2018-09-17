@@ -23,5 +23,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.ANNOTATION_TYPE)
 public @interface DefaultFor {
     /** @return the locations to which the annotation should be applied */
-    TypeUseLocation[] value();
+    TypeUseLocation[] value() default {};
+
+    /** @return {@link TypeKind}s of types for which an annotation should be added */
+    TypeKind[] types() default {};
 }

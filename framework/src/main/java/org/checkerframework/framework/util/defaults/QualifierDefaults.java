@@ -263,6 +263,14 @@ public class QualifierDefaults {
         checkedCodeDefaults.add(new Default(absoluteDefaultAnno, location));
     }
 
+    public void addCheckedCodeDefault(
+            AnnotationMirror absoluteDefaultAnno,
+            TypeUseLocation location,
+            org.checkerframework.framework.qual.TypeKind type) {
+        checkDuplicates(checkedCodeDefaults, absoluteDefaultAnno, location, type);
+        checkedCodeDefaults.add(new Default(absoluteDefaultAnno, location, type));
+    }
+
     /** Sets the default annotation for unchecked elements. */
     public void addUncheckedCodeDefault(
             AnnotationMirror uncheckedDefaultAnno, TypeUseLocation location) {
@@ -277,6 +285,17 @@ public class QualifierDefaults {
             AnnotationMirror absoluteDefaultAnno, TypeUseLocation[] locations) {
         for (TypeUseLocation location : locations) {
             addUncheckedCodeDefault(absoluteDefaultAnno, location);
+        }
+    }
+
+    public void addCheckedCodeDefaults(
+            AnnotationMirror absoluteDefaultAnno,
+            TypeUseLocation[] locations,
+            org.checkerframework.framework.qual.TypeKind[] types) {
+        for (TypeUseLocation location : locations) {
+            for (org.checkerframework.framework.qual.TypeKind type : types) {
+                addCheckedCodeDefault(absoluteDefaultAnno, location, type);
+            }
         }
     }
 
@@ -330,12 +349,46 @@ public class QualifierDefaults {
         }
     }
 
+    private void checkDuplicates(
+            DefaultSet previousDefaults,
+            AnnotationMirror newAnno,
+            TypeUseLocation newLoc,
+            org.checkerframework.framework.qual.TypeKind newType) {
+        if (conflictsWithExistingDefaults(previousDefaults, newAnno, newLoc, newType)) {
+            throw new BugInCF(
+                    "Only one qualifier from a hierarchy can be the default. Existing: "
+                            + previousDefaults
+                            + " and new: "
+                            + (new Default(newAnno, newLoc, newType)));
+        }
+    }
+
     private boolean conflictsWithExistingDefaults(
             DefaultSet previousDefaults, AnnotationMirror newAnno, TypeUseLocation newLoc) {
         final QualifierHierarchy qualHierarchy = atypeFactory.getQualifierHierarchy();
 
         for (Default previous : previousDefaults) {
             if (!AnnotationUtils.areSame(newAnno, previous.anno) && previous.location == newLoc) {
+                final AnnotationMirror previousTop = qualHierarchy.getTopAnnotation(previous.anno);
+                if (qualHierarchy.isSubtype(newAnno, previousTop)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean conflictsWithExistingDefaults(
+            DefaultSet previousDefaults,
+            AnnotationMirror newAnno,
+            TypeUseLocation newLoc,
+            org.checkerframework.framework.qual.TypeKind newType) {
+        final QualifierHierarchy qualHierarchy = atypeFactory.getQualifierHierarchy();
+
+        for (Default previous : previousDefaults) {
+            if (!AnnotationUtils.areSame(newAnno, previous.anno)
+                    && previous.location == newLoc
+                    && previous.type == newType) {
                 final AnnotationMirror previousTop = qualHierarchy.getTopAnnotation(previous.anno);
                 if (qualHierarchy.isSubtype(newAnno, previousTop)) {
                     return true;
@@ -720,6 +773,11 @@ public class QualifierDefaults {
          */
         protected TypeUseLocation location;
 
+        /**
+         * Type Kind to which to apply the default. (Should only be set by the applyDefault method.)
+         */
+        protected org.checkerframework.framework.qual.TypeKind typeKind;
+
         /** The default element applier implementation. */
         protected final DefaultApplierElementImpl impl;
 
@@ -755,6 +813,7 @@ public class QualifierDefaults {
          */
         public void applyDefault(Default def) {
             this.location = def.location;
+            this.typeKind = def.type;
             impl.visit(type, def.anno);
         }
 
@@ -808,6 +867,20 @@ public class QualifierDefaults {
             }
         }
 
+        /**
+         * Map between {@link org.checkerframework.framework.qual.TypeKind} and {@link
+         * javax.lang.model.type.TypeKind}.
+         *
+         * @param typeKind the Checker Framework TypeKind
+         * @return the javax TypeKind
+         */
+        private TypeKind mapTypeKinds(org.checkerframework.framework.qual.TypeKind typeKind) {
+            if (typeKind == null) {
+                return null;
+            }
+            return TypeKind.valueOf(typeKind.name());
+        }
+
         protected class DefaultApplierElementImpl
                 extends AnnotatedTypeScanner<Void, AnnotationMirror> {
 
@@ -817,12 +890,15 @@ public class QualifierDefaults {
                     return super.scan(t, qual);
                 }
 
+                TypeKind mappedTk = mapTypeKinds(typeKind);
+
                 switch (location) {
                     case FIELD:
                         {
                             if (scope != null
                                     && scope.getKind() == ElementKind.FIELD
-                                    && t == type) {
+                                    && t == type
+                                    && (mappedTk == null || t.getKind() == mappedTk)) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -831,7 +907,8 @@ public class QualifierDefaults {
                         {
                             if (scope != null
                                     && scope.getKind() == ElementKind.LOCAL_VARIABLE
-                                    && t == type) {
+                                    && t == type
+                                    && (mappedTk == null || t.getKind() == mappedTk)) {
                                 // TODO: how do we determine that we are in a cast or instanceof
                                 // type?
                                 addAnnotation(t, qual);
@@ -842,7 +919,8 @@ public class QualifierDefaults {
                         {
                             if (scope != null
                                     && scope.getKind() == ElementKind.RESOURCE_VARIABLE
-                                    && t == type) {
+                                    && t == type
+                                    && (mappedTk == null || t.getKind() == mappedTk)) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -851,7 +929,8 @@ public class QualifierDefaults {
                         {
                             if (scope != null
                                     && scope.getKind() == ElementKind.EXCEPTION_PARAMETER
-                                    && t == type) {
+                                    && t == type
+                                    && (mappedTk == null || t.getKind() == mappedTk)) {
                                 addAnnotation(t, qual);
                                 if (t.getKind() == TypeKind.UNION) {
                                     AnnotatedUnionType aut = (AnnotatedUnionType) t;
@@ -867,13 +946,15 @@ public class QualifierDefaults {
                         {
                             if (scope != null
                                     && scope.getKind() == ElementKind.PARAMETER
-                                    && t == type) {
+                                    && t == type
+                                    && (mappedTk == null || t.getKind() == mappedTk)) {
                                 addAnnotation(t, qual);
                             } else if (scope != null
                                     && (scope.getKind() == ElementKind.METHOD
                                             || scope.getKind() == ElementKind.CONSTRUCTOR)
                                     && t.getKind() == TypeKind.EXECUTABLE
-                                    && t == type) {
+                                    && t == type
+                                    && (mappedTk == null || t.getKind() == mappedTk)) {
 
                                 for (AnnotatedTypeMirror atm :
                                         ((AnnotatedExecutableType) t).getParameterTypes()) {
@@ -889,7 +970,8 @@ public class QualifierDefaults {
                             if (scope != null
                                     && scope.getKind() == ElementKind.PARAMETER
                                     && t == type
-                                    && scope.getSimpleName().contentEquals("this")) {
+                                    && scope.getSimpleName().contentEquals("this")
+                                    && (mappedTk == null || t.getKind() == mappedTk)) {
                                 // TODO: comparison against "this" is ugly, won't work
                                 // for all possible names for receiver parameter.
                                 // Comparison to Names._this might be a bit faster.
@@ -897,7 +979,8 @@ public class QualifierDefaults {
                             } else if (scope != null
                                     && (scope.getKind() == ElementKind.METHOD)
                                     && t.getKind() == TypeKind.EXECUTABLE
-                                    && t == type) {
+                                    && t == type
+                                    && (mappedTk == null || t.getKind() == mappedTk)) {
 
                                 final AnnotatedDeclaredType receiver =
                                         ((AnnotatedExecutableType) t).getReceiverType();
@@ -912,7 +995,8 @@ public class QualifierDefaults {
                             if (scope != null
                                     && scope.getKind() == ElementKind.METHOD
                                     && t.getKind() == TypeKind.EXECUTABLE
-                                    && t == type) {
+                                    && t == type
+                                    && (mappedTk == null || t.getKind() == mappedTk)) {
                                 final AnnotatedTypeMirror returnType =
                                         ((AnnotatedExecutableType) t).getReturnType();
                                 if (shouldBeAnnotated(returnType, false)) {
