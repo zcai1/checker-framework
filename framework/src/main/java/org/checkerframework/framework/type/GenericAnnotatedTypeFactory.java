@@ -74,7 +74,6 @@ import org.checkerframework.framework.qual.ImplicitFor;
 import org.checkerframework.framework.qual.MonotonicQualifier;
 import org.checkerframework.framework.qual.RelevantJavaTypes;
 import org.checkerframework.framework.qual.TypeUseLocation;
-import org.checkerframework.framework.type.AnnotatedTypeFactory.ParameterizedMethodType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedDeclaredType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedExecutableType;
 import org.checkerframework.framework.type.treeannotator.ImplicitsTreeAnnotator;
@@ -586,14 +585,8 @@ public abstract class GenericAnnotatedTypeFactory<
             if (defaultFor != null) {
                 final TypeUseLocation[] locations = defaultFor.value();
                 final org.checkerframework.framework.qual.TypeKind[] typeKinds = defaultFor.types();
-                if (typeKinds.length != 0) {
-                    defs.addCheckedCodeDefaults(
-                            AnnotationBuilder.fromClass(elements, qual), locations, typeKinds);
-                } else {
-                    defs.addCheckedCodeDefaults(
-                            AnnotationBuilder.fromClass(elements, qual), locations);
-                }
-                defs.addCheckedCodeDefaults(AnnotationBuilder.fromClass(elements, qual), locations);
+                defs.addCheckedCodeDefaults(
+                        AnnotationBuilder.fromClass(elements, qual), locations, typeKinds);
             }
 
             if (qual.getAnnotation(DefaultQualifierInHierarchy.class) != null) {
@@ -601,17 +594,6 @@ public abstract class GenericAnnotatedTypeFactory<
                         AnnotationBuilder.fromClass(elements, qual), TypeUseLocation.OTHERWISE);
             }
         }
-    }
-
-    /**
-     * Map between {@link org.checkerframework.framework.qual.TypeKind} and {@link
-     * javax.lang.model.type.TypeKind}.
-     *
-     * @param typeKind the Checker Framework TypeKind
-     * @return the javax TypeKind
-     */
-    private TypeKind mapTypeKinds(org.checkerframework.framework.qual.TypeKind typeKind) {
-        return TypeKind.valueOf(typeKind.name());
     }
 
     /**
@@ -652,8 +634,10 @@ public abstract class GenericAnnotatedTypeFactory<
 
             if (defaultInUncheckedCodeFor != null) {
                 final TypeUseLocation[] locations = defaultInUncheckedCodeFor.value();
+                final org.checkerframework.framework.qual.TypeKind[] typeKinds =
+                        defaultInUncheckedCodeFor.types();
                 defs.addUncheckedCodeDefaults(
-                        AnnotationBuilder.fromClass(elements, annotation), locations);
+                        AnnotationBuilder.fromClass(elements, annotation), locations, typeKinds);
             }
 
             if (annotation.getAnnotation(DefaultQualifierInHierarchyInUncheckedCode.class)

@@ -51,4 +51,29 @@ public @interface DefaultQualifier {
 
     /** @return the locations to which the annotation should be applied */
     TypeUseLocation[] locations() default {TypeUseLocation.ALL};
+
+    /** @return {@link TypeKind}s of types for which an annotation should be added */
+    TypeKind[] types() default {
+        TypeKind.ARRAY,
+        TypeKind.BOOLEAN,
+        TypeKind.BYTE,
+        TypeKind.CHAR,
+        TypeKind.DECLARED,
+        TypeKind.DOUBLE,
+        TypeKind.ERROR,
+        TypeKind.EXECUTABLE,
+        TypeKind.FLOAT,
+        TypeKind.INT,
+        TypeKind.INTERSECTION,
+        TypeKind.LONG,
+        TypeKind.NONE,
+        TypeKind.NULL,
+        TypeKind.OTHER,
+        TypeKind.PACKAGE,
+        TypeKind.SHORT,
+        TypeKind.TYPEVAR,
+        TypeKind.UNION,
+        TypeKind.VOID,
+        TypeKind.WILDCARD
+    };
 }

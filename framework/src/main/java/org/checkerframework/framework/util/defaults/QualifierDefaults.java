@@ -254,8 +254,8 @@ public class QualifierDefaults {
     }
 
     /**
-     * Sets the default annotations. A programmer may override this by writing the @DefaultQualifier
-     * annotation on an element.
+     * Sets the default annotations at specific location. A programmer may override this by writing
+     * the @DefaultQualifier annotation on an element.
      */
     public void addCheckedCodeDefault(
             AnnotationMirror absoluteDefaultAnno, TypeUseLocation location) {
@@ -263,6 +263,10 @@ public class QualifierDefaults {
         checkedCodeDefaults.add(new Default(absoluteDefaultAnno, location));
     }
 
+    /**
+     * Sets the default annotations at specific location and type. A programmer may override this by
+     * writing the @DefaultQualifier annotation on an element.
+     */
     public void addCheckedCodeDefault(
             AnnotationMirror absoluteDefaultAnno,
             TypeUseLocation location,
@@ -271,13 +275,24 @@ public class QualifierDefaults {
         checkedCodeDefaults.add(new Default(absoluteDefaultAnno, location, type));
     }
 
-    /** Sets the default annotation for unchecked elements. */
+    /** Sets the default annotation for unchecked elements at specific location. */
     public void addUncheckedCodeDefault(
             AnnotationMirror uncheckedDefaultAnno, TypeUseLocation location) {
         checkDuplicates(uncheckedCodeDefaults, uncheckedDefaultAnno, location);
         checkIsValidUncheckedCodeLocation(uncheckedDefaultAnno, location);
 
         uncheckedCodeDefaults.add(new Default(uncheckedDefaultAnno, location));
+    }
+
+    /** Sets the default annotation for unchecked elements at specific location and type. */
+    public void addUncheckedCodeDefault(
+            AnnotationMirror uncheckedDefaultAnno,
+            TypeUseLocation location,
+            org.checkerframework.framework.qual.TypeKind type) {
+        checkDuplicates(uncheckedCodeDefaults, uncheckedDefaultAnno, location, type);
+        checkIsValidUncheckedCodeLocation(uncheckedDefaultAnno, location);
+
+        uncheckedCodeDefaults.add(new Default(uncheckedDefaultAnno, location, type));
     }
 
     /** Sets the default annotation for unchecked elements, with specific locations. */
@@ -288,6 +303,27 @@ public class QualifierDefaults {
         }
     }
 
+    /** Sets the default annotation for unchecked elements, with specific locations and types. */
+    public void addUncheckedCodeDefaults(
+            AnnotationMirror absoluteDefaultAnno,
+            TypeUseLocation[] locations,
+            org.checkerframework.framework.qual.TypeKind[] types) {
+        for (TypeUseLocation location : locations) {
+            for (org.checkerframework.framework.qual.TypeKind type : types) {
+                addUncheckedCodeDefault(absoluteDefaultAnno, location, type);
+            }
+        }
+    }
+
+    /** Sets the default annotation for checked elements, with specific locations. */
+    public void addCheckedCodeDefaults(
+            AnnotationMirror absoluteDefaultAnno, TypeUseLocation[] locations) {
+        for (TypeUseLocation location : locations) {
+            addCheckedCodeDefault(absoluteDefaultAnno, location);
+        }
+    }
+
+    /** Sets the default annotation for checked elements, with specific locations and types. */
     public void addCheckedCodeDefaults(
             AnnotationMirror absoluteDefaultAnno,
             TypeUseLocation[] locations,
@@ -296,13 +332,6 @@ public class QualifierDefaults {
             for (org.checkerframework.framework.qual.TypeKind type : types) {
                 addCheckedCodeDefault(absoluteDefaultAnno, location, type);
             }
-        }
-    }
-
-    public void addCheckedCodeDefaults(
-            AnnotationMirror absoluteDefaultAnno, TypeUseLocation[] locations) {
-        for (TypeUseLocation location : locations) {
-            addCheckedCodeDefault(absoluteDefaultAnno, location);
         }
     }
 
