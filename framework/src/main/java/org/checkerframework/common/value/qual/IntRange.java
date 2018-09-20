@@ -25,9 +25,6 @@ import org.checkerframework.framework.qual.TypeUseLocation;
  */
 @SubtypeOf(UnknownVal.class)
 @Retention(RetentionPolicy.RUNTIME)
-@DefaultFor(
-        value = {TypeUseLocation.PARAMETER},
-        types = {TypeKind.BYTE})
 @Target({ElementType.TYPE_PARAMETER, ElementType.TYPE_USE})
 public @interface IntRange {
     /** Smallest value in the range, inclusive. */
