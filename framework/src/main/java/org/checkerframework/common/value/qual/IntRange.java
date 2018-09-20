@@ -4,10 +4,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import org.checkerframework.framework.qual.DefaultFor;
 import org.checkerframework.framework.qual.SubtypeOf;
-import org.checkerframework.framework.qual.TypeKind;
-import org.checkerframework.framework.qual.TypeUseLocation;
 
 /**
  * An expression with this type evaluates to an integral value (byte, short, char, int, or long) in
