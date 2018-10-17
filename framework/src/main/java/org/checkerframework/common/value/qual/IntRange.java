@@ -6,7 +6,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import org.checkerframework.framework.qual.DefaultFor;
 import org.checkerframework.framework.qual.SubtypeOf;
-import org.checkerframework.framework.qual.TypeKind;
 import org.checkerframework.framework.qual.TypeUseLocation;
 
 /**
@@ -25,8 +24,7 @@ import org.checkerframework.framework.qual.TypeUseLocation;
  */
 @SubtypeOf(UnknownVal.class)
 @Retention(RetentionPolicy.RUNTIME)
-@DefaultFor(
-        value = {TypeUseLocation.FIELD, TypeUseLocation.PARAMETER, TypeUseLocation.RETURN})
+@DefaultFor(value = {TypeUseLocation.FIELD, TypeUseLocation.PARAMETER, TypeUseLocation.RETURN})
 @Target({ElementType.TYPE_PARAMETER, ElementType.TYPE_USE})
 public @interface IntRange {
     /** Smallest value in the range, inclusive. */
