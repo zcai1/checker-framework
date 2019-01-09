@@ -16,19 +16,19 @@ public class Default implements Comparable<Default> {
     // please remember to add any fields to the hashcode calculation
     public final AnnotationMirror anno;
     public final TypeUseLocation location;
-    public final TypeKind type;
+    public final TypeKind[] types;
 
     public Default(final AnnotationMirror anno, final TypeUseLocation location) {
         this.anno = anno;
         this.location = location;
-        this.type = null;
+        this.types = TypeKind.all();
     }
 
     public Default(
-            final AnnotationMirror anno, final TypeUseLocation location, final TypeKind type) {
+            final AnnotationMirror anno, final TypeUseLocation location, final TypeKind[] types) {
         this.anno = anno;
         this.location = location;
-        this.type = type;
+        this.types = types;
     }
 
     @Override

@@ -12,6 +12,8 @@ import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
 import com.sun.tools.javac.code.Type.WildcardType;
 import java.lang.annotation.Annotation;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -270,9 +272,9 @@ public class QualifierDefaults {
     public void addCheckedCodeDefault(
             AnnotationMirror absoluteDefaultAnno,
             TypeUseLocation location,
-            org.checkerframework.framework.qual.TypeKind type) {
-        checkDuplicates(checkedCodeDefaults, absoluteDefaultAnno, location, type);
-        checkedCodeDefaults.add(new Default(absoluteDefaultAnno, location, type));
+            org.checkerframework.framework.qual.TypeKind[] types) {
+        checkDuplicates(checkedCodeDefaults, absoluteDefaultAnno, location, types);
+        checkedCodeDefaults.add(new Default(absoluteDefaultAnno, location, types));
     }
 
     /** Sets the default annotation for unchecked elements at specific location. */
@@ -288,11 +290,11 @@ public class QualifierDefaults {
     public void addUncheckedCodeDefault(
             AnnotationMirror uncheckedDefaultAnno,
             TypeUseLocation location,
-            org.checkerframework.framework.qual.TypeKind type) {
-        checkDuplicates(uncheckedCodeDefaults, uncheckedDefaultAnno, location, type);
+            org.checkerframework.framework.qual.TypeKind[] types) {
+        checkDuplicates(uncheckedCodeDefaults, uncheckedDefaultAnno, location, types);
         checkIsValidUncheckedCodeLocation(uncheckedDefaultAnno, location);
 
-        uncheckedCodeDefaults.add(new Default(uncheckedDefaultAnno, location, type));
+        uncheckedCodeDefaults.add(new Default(uncheckedDefaultAnno, location, types));
     }
 
     /** Sets the default annotation for unchecked elements, with specific locations. */
@@ -309,9 +311,7 @@ public class QualifierDefaults {
             TypeUseLocation[] locations,
             org.checkerframework.framework.qual.TypeKind[] types) {
         for (TypeUseLocation location : locations) {
-            for (org.checkerframework.framework.qual.TypeKind type : types) {
-                addUncheckedCodeDefault(absoluteDefaultAnno, location, type);
-            }
+            addUncheckedCodeDefault(absoluteDefaultAnno, location, types);
         }
     }
 
@@ -329,9 +329,7 @@ public class QualifierDefaults {
             TypeUseLocation[] locations,
             org.checkerframework.framework.qual.TypeKind[] types) {
         for (TypeUseLocation location : locations) {
-            for (org.checkerframework.framework.qual.TypeKind type : types) {
-                addCheckedCodeDefault(absoluteDefaultAnno, location, type);
-            }
+            addCheckedCodeDefault(absoluteDefaultAnno, location, types);
         }
     }
 
@@ -382,13 +380,13 @@ public class QualifierDefaults {
             DefaultSet previousDefaults,
             AnnotationMirror newAnno,
             TypeUseLocation newLoc,
-            org.checkerframework.framework.qual.TypeKind newType) {
-        if (conflictsWithExistingDefaults(previousDefaults, newAnno, newLoc, newType)) {
+            org.checkerframework.framework.qual.TypeKind[] newTypes) {
+        if (conflictsWithExistingDefaults(previousDefaults, newAnno, newLoc, newTypes)) {
             throw new BugInCF(
                     "Only one qualifier from a hierarchy can be the default. Existing: "
                             + previousDefaults
                             + " and new: "
-                            + (new Default(newAnno, newLoc, newType)));
+                            + (new Default(newAnno, newLoc, newTypes)));
         }
     }
 
@@ -411,13 +409,19 @@ public class QualifierDefaults {
             DefaultSet previousDefaults,
             AnnotationMirror newAnno,
             TypeUseLocation newLoc,
-            org.checkerframework.framework.qual.TypeKind newType) {
+            org.checkerframework.framework.qual.TypeKind[] newTypes) {
         final QualifierHierarchy qualHierarchy = atypeFactory.getQualifierHierarchy();
 
         for (Default previous : previousDefaults) {
+            Set<org.checkerframework.framework.qual.TypeKind> previousTypeSet =
+                    new HashSet<>(Arrays.asList(previous.types));
+            Set<org.checkerframework.framework.qual.TypeKind> newTypeSet =
+                    new HashSet<>(Arrays.asList(newTypes));
             if (!AnnotationUtils.areSame(newAnno, previous.anno)
                     && previous.location == newLoc
-                    && previous.type == newType) {
+                    && (previousTypeSet.containsAll(newTypeSet)
+                            || previousTypeSet.contains(
+                                    org.checkerframework.framework.qual.TypeKind.ALL))) {
                 final AnnotationMirror previousTop = qualHierarchy.getTopAnnotation(previous.anno);
                 if (qualHierarchy.isSubtype(newAnno, previousTop)) {
                     return true;
@@ -805,7 +809,7 @@ public class QualifierDefaults {
         /**
          * Type Kind to which to apply the default. (Should only be set by the applyDefault method.)
          */
-        protected org.checkerframework.framework.qual.TypeKind typeKind;
+        protected org.checkerframework.framework.qual.TypeKind[] typeKinds;
 
         /** The default element applier implementation. */
         protected final DefaultApplierElementImpl impl;
@@ -842,7 +846,7 @@ public class QualifierDefaults {
          */
         public void applyDefault(Default def) {
             this.location = def.location;
-            this.typeKind = def.type;
+            this.typeKinds = def.types;
             impl.visit(type, def.anno);
         }
 
@@ -896,20 +900,6 @@ public class QualifierDefaults {
             }
         }
 
-        /**
-         * Map between {@link org.checkerframework.framework.qual.TypeKind} and {@link
-         * javax.lang.model.type.TypeKind}.
-         *
-         * @param typeKind the Checker Framework TypeKind
-         * @return the javax TypeKind
-         */
-        private TypeKind mapTypeKinds(org.checkerframework.framework.qual.TypeKind typeKind) {
-            if (typeKind == null) {
-                return null;
-            }
-            return TypeKind.valueOf(typeKind.name());
-        }
-
         protected class DefaultApplierElementImpl
                 extends AnnotatedTypeScanner<Void, AnnotationMirror> {
 
@@ -919,7 +909,8 @@ public class QualifierDefaults {
                     return super.scan(t, qual);
                 }
 
-                TypeKind mappedTk = mapTypeKinds(typeKind);
+                List<TypeKind> mappedTk =
+                        org.checkerframework.framework.qual.TypeKind.mapTypeKinds(typeKinds);
 
                 switch (location) {
                     case FIELD:
@@ -927,7 +918,7 @@ public class QualifierDefaults {
                             if (scope != null
                                     && scope.getKind() == ElementKind.FIELD
                                     && t == type
-                                    && (mappedTk == null || t.getKind() == mappedTk)) {
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -937,7 +928,7 @@ public class QualifierDefaults {
                             if (scope != null
                                     && scope.getKind() == ElementKind.LOCAL_VARIABLE
                                     && t == type
-                                    && (mappedTk == null || t.getKind() == mappedTk)) {
+                                    && mappedTk.contains(t.getKind())) {
                                 // TODO: how do we determine that we are in a cast or instanceof
                                 // type?
                                 addAnnotation(t, qual);
@@ -949,7 +940,7 @@ public class QualifierDefaults {
                             if (scope != null
                                     && scope.getKind() == ElementKind.RESOURCE_VARIABLE
                                     && t == type
-                                    && (mappedTk == null || t.getKind() == mappedTk)) {
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -959,7 +950,7 @@ public class QualifierDefaults {
                             if (scope != null
                                     && scope.getKind() == ElementKind.EXCEPTION_PARAMETER
                                     && t == type
-                                    && (mappedTk == null || t.getKind() == mappedTk)) {
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                                 if (t.getKind() == TypeKind.UNION) {
                                     AnnotatedUnionType aut = (AnnotatedUnionType) t;
@@ -976,14 +967,14 @@ public class QualifierDefaults {
                             if (scope != null
                                     && scope.getKind() == ElementKind.PARAMETER
                                     && t == type
-                                    && (mappedTk == null || t.getKind() == mappedTk)) {
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             } else if (scope != null
                                     && (scope.getKind() == ElementKind.METHOD
                                             || scope.getKind() == ElementKind.CONSTRUCTOR)
                                     && t.getKind() == TypeKind.EXECUTABLE
                                     && t == type
-                                    && (mappedTk == null || t.getKind() == mappedTk)) {
+                                    && mappedTk.contains(t.getKind())) {
 
                                 for (AnnotatedTypeMirror atm :
                                         ((AnnotatedExecutableType) t).getParameterTypes()) {
@@ -1000,7 +991,7 @@ public class QualifierDefaults {
                                     && scope.getKind() == ElementKind.PARAMETER
                                     && t == type
                                     && scope.getSimpleName().contentEquals("this")
-                                    && (mappedTk == null || t.getKind() == mappedTk)) {
+                                    && mappedTk.contains(t.getKind())) {
                                 // TODO: comparison against "this" is ugly, won't work
                                 // for all possible names for receiver parameter.
                                 // Comparison to Names._this might be a bit faster.
@@ -1009,7 +1000,7 @@ public class QualifierDefaults {
                                     && (scope.getKind() == ElementKind.METHOD)
                                     && t.getKind() == TypeKind.EXECUTABLE
                                     && t == type
-                                    && (mappedTk == null || t.getKind() == mappedTk)) {
+                                    && mappedTk.contains(t.getKind())) {
 
                                 final AnnotatedDeclaredType receiver =
                                         ((AnnotatedExecutableType) t).getReceiverType();
@@ -1025,7 +1016,7 @@ public class QualifierDefaults {
                                     && scope.getKind() == ElementKind.METHOD
                                     && t.getKind() == TypeKind.EXECUTABLE
                                     && t == type
-                                    && (mappedTk == null || t.getKind() == mappedTk)) {
+                                    && mappedTk.contains(t.getKind())) {
                                 final AnnotatedTypeMirror returnType =
                                         ((AnnotatedExecutableType) t).getReturnType();
                                 if (shouldBeAnnotated(returnType, false)) {
@@ -1038,7 +1029,8 @@ public class QualifierDefaults {
                     case IMPLICIT_LOWER_BOUND:
                         {
                             if (isLowerBound
-                                    && boundType.isOneOf(BoundType.UNBOUNDED, BoundType.UPPER)) {
+                                    && boundType.isOneOf(BoundType.UNBOUNDED, BoundType.UPPER)
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -1046,7 +1038,9 @@ public class QualifierDefaults {
 
                     case EXPLICIT_LOWER_BOUND:
                         {
-                            if (isLowerBound && boundType.isOneOf(BoundType.LOWER)) {
+                            if (isLowerBound
+                                    && boundType.isOneOf(BoundType.LOWER)
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -1054,7 +1048,7 @@ public class QualifierDefaults {
 
                     case LOWER_BOUND:
                         {
-                            if (isLowerBound) {
+                            if (isLowerBound && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -1063,21 +1057,24 @@ public class QualifierDefaults {
                     case IMPLICIT_UPPER_BOUND:
                         {
                             if (isUpperBound
-                                    && boundType.isOneOf(BoundType.UNBOUNDED, BoundType.LOWER)) {
+                                    && boundType.isOneOf(BoundType.UNBOUNDED, BoundType.LOWER)
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             }
                             break;
                         }
                     case EXPLICIT_UPPER_BOUND:
                         {
-                            if (isUpperBound && boundType.isOneOf(BoundType.UPPER)) {
+                            if (isUpperBound
+                                    && boundType.isOneOf(BoundType.UPPER)
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             }
                             break;
                         }
                     case UPPER_BOUND:
                         {
-                            if (this.isUpperBound) {
+                            if (this.isUpperBound && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -1085,8 +1082,10 @@ public class QualifierDefaults {
                     case OTHERWISE:
                     case ALL:
                         {
-                            // TODO: forbid ALL if anything else was given.
-                            addAnnotation(t, qual);
+                            if (mappedTk.contains(t.getKind())) {
+                                // TODO: forbid ALL if anything else was given.
+                                addAnnotation(t, qual);
+                            }
                             break;
                         }
                     default:
