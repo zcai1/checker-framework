@@ -372,7 +372,7 @@ public class QualifierDefaults {
                     "Only one qualifier from a hierarchy can be the default. Existing: "
                             + previousDefaults
                             + " and new: "
-                            + (new Default(newAnno, newLoc)));
+                            + new Default(newAnno, newLoc));
         }
     }
 
@@ -559,8 +559,8 @@ public class QualifierDefaults {
 
         boolean defaultTypeVarLocals =
                 (atypeFactory instanceof GenericAnnotatedTypeFactory<?, ?, ?, ?>)
-                        && (((GenericAnnotatedTypeFactory<?, ?, ?, ?>) atypeFactory)
-                                .getShouldDefaultTypeVarLocals());
+                        && ((GenericAnnotatedTypeFactory<?, ?, ?, ?>) atypeFactory)
+                                .getShouldDefaultTypeVarLocals();
         applyToTypeVar =
                 defaultTypeVarLocals
                         && elt != null
@@ -836,7 +836,7 @@ public class QualifierDefaults {
             this.scope = scope;
             this.type = type;
             this.impl = new DefaultApplierElementImpl();
-            this.defaultableTypeVar = (applyToTypeVar) ? (AnnotatedTypeVariable) type : null;
+            this.defaultableTypeVar = applyToTypeVar ? (AnnotatedTypeVariable) type : null;
         }
 
         /**
