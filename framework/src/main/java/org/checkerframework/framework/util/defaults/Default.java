@@ -19,9 +19,7 @@ public class Default implements Comparable<Default> {
     public final TypeKind[] types;
 
     public Default(final AnnotationMirror anno, final TypeUseLocation location) {
-        this.anno = anno;
-        this.location = location;
-        this.types = TypeKind.all();
+        this(anno, location, TypeKind.all());
     }
 
     public Default(

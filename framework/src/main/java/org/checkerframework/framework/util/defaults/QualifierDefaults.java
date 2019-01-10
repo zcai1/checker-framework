@@ -261,8 +261,8 @@ public class QualifierDefaults {
      */
     public void addCheckedCodeDefault(
             AnnotationMirror absoluteDefaultAnno, TypeUseLocation location) {
-        checkDuplicates(checkedCodeDefaults, absoluteDefaultAnno, location);
-        checkedCodeDefaults.add(new Default(absoluteDefaultAnno, location));
+        addCheckedCodeDefault(
+                absoluteDefaultAnno, location, org.checkerframework.framework.qual.TypeKind.all());
     }
 
     /**
@@ -280,10 +280,8 @@ public class QualifierDefaults {
     /** Sets the default annotation for unchecked elements at specific location. */
     public void addUncheckedCodeDefault(
             AnnotationMirror uncheckedDefaultAnno, TypeUseLocation location) {
-        checkDuplicates(uncheckedCodeDefaults, uncheckedDefaultAnno, location);
-        checkIsValidUncheckedCodeLocation(uncheckedDefaultAnno, location);
-
-        uncheckedCodeDefaults.add(new Default(uncheckedDefaultAnno, location));
+        addUncheckedCodeDefault(
+                uncheckedDefaultAnno, location, org.checkerframework.framework.qual.TypeKind.all());
     }
 
     /** Sets the default annotation for unchecked elements at specific location and type. */
@@ -300,9 +298,8 @@ public class QualifierDefaults {
     /** Sets the default annotation for unchecked elements, with specific locations. */
     public void addUncheckedCodeDefaults(
             AnnotationMirror absoluteDefaultAnno, TypeUseLocation[] locations) {
-        for (TypeUseLocation location : locations) {
-            addUncheckedCodeDefault(absoluteDefaultAnno, location);
-        }
+        addUncheckedCodeDefaults(
+                absoluteDefaultAnno, locations, org.checkerframework.framework.qual.TypeKind.all());
     }
 
     /** Sets the default annotation for unchecked elements, with specific locations and types. */
@@ -318,9 +315,8 @@ public class QualifierDefaults {
     /** Sets the default annotation for checked elements, with specific locations. */
     public void addCheckedCodeDefaults(
             AnnotationMirror absoluteDefaultAnno, TypeUseLocation[] locations) {
-        for (TypeUseLocation location : locations) {
-            addCheckedCodeDefault(absoluteDefaultAnno, location);
-        }
+        addCheckedCodeDefaults(
+                absoluteDefaultAnno, locations, org.checkerframework.framework.qual.TypeKind.all());
     }
 
     /** Sets the default annotation for checked elements, with specific locations and types. */
@@ -338,7 +334,11 @@ public class QualifierDefaults {
             Element elem, AnnotationMirror elementDefaultAnno, TypeUseLocation location) {
         DefaultSet prevset = elementDefaults.get(elem);
         if (prevset != null) {
-            checkDuplicates(prevset, elementDefaultAnno, location);
+            checkDuplicates(
+                    prevset,
+                    elementDefaultAnno,
+                    location,
+                    org.checkerframework.framework.qual.TypeKind.all());
         } else {
             prevset = new DefaultSet();
         }
@@ -366,17 +366,6 @@ public class QualifierDefaults {
     }
 
     private void checkDuplicates(
-            DefaultSet previousDefaults, AnnotationMirror newAnno, TypeUseLocation newLoc) {
-        if (conflictsWithExistingDefaults(previousDefaults, newAnno, newLoc)) {
-            throw new BugInCF(
-                    "Only one qualifier from a hierarchy can be the default. Existing: "
-                            + previousDefaults
-                            + " and new: "
-                            + new Default(newAnno, newLoc));
-        }
-    }
-
-    private void checkDuplicates(
             DefaultSet previousDefaults,
             AnnotationMirror newAnno,
             TypeUseLocation newLoc,
@@ -392,17 +381,11 @@ public class QualifierDefaults {
 
     private boolean conflictsWithExistingDefaults(
             DefaultSet previousDefaults, AnnotationMirror newAnno, TypeUseLocation newLoc) {
-        final QualifierHierarchy qualHierarchy = atypeFactory.getQualifierHierarchy();
-
-        for (Default previous : previousDefaults) {
-            if (!AnnotationUtils.areSame(newAnno, previous.anno) && previous.location == newLoc) {
-                final AnnotationMirror previousTop = qualHierarchy.getTopAnnotation(previous.anno);
-                if (qualHierarchy.isSubtype(newAnno, previousTop)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return conflictsWithExistingDefaults(
+                previousDefaults,
+                newAnno,
+                newLoc,
+                org.checkerframework.framework.qual.TypeKind.all());
     }
 
     private boolean conflictsWithExistingDefaults(
@@ -412,11 +395,11 @@ public class QualifierDefaults {
             org.checkerframework.framework.qual.TypeKind[] newTypes) {
         final QualifierHierarchy qualHierarchy = atypeFactory.getQualifierHierarchy();
 
+        Set<org.checkerframework.framework.qual.TypeKind> newTypeSet =
+                new HashSet<>(Arrays.asList(newTypes));
         for (Default previous : previousDefaults) {
             Set<org.checkerframework.framework.qual.TypeKind> previousTypeSet =
                     new HashSet<>(Arrays.asList(previous.types));
-            Set<org.checkerframework.framework.qual.TypeKind> newTypeSet =
-                    new HashSet<>(Arrays.asList(newTypes));
             if (!AnnotationUtils.areSame(newAnno, previous.anno)
                     && previous.location == newLoc
                     && (previousTypeSet.containsAll(newTypeSet)
