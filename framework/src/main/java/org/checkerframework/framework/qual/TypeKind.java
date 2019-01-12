@@ -50,6 +50,18 @@ public enum TypeKind {
     /** Corresponds to {@link javax.lang.model.type.TypeKind#ARRAY} types. */
     ARRAY,
 
+    /** Corresponds to {@link javax.lang.model.type.TypeKind#ARRAY} types. */
+    BYTE_ARRAY,
+
+    /** Corresponds to {@link javax.lang.model.type.TypeKind#ARRAY} types. */
+    SHORT_ARRAY,
+
+    /** Corresponds to {@link javax.lang.model.type.TypeKind#ARRAY} types. */
+    CHAR_ARRAY,
+
+    /** Corresponds to {@link javax.lang.model.type.TypeKind#ARRAY} types. */
+    INT_ARRAY,
+
     /** Corresponds to {@link javax.lang.model.type.TypeKind#DECLARED} types. */
     DECLARED,
 
@@ -91,6 +103,16 @@ public enum TypeKind {
     }
 
     /**
+     * Returns a list of TypeKinds containing only ALL
+     *
+     * @return list of TypeKind containing only ALL
+     */
+    public static TypeKind[] arrays() {
+        TypeKind[] array = {ARRAY, BYTE_ARRAY, SHORT_ARRAY, CHAR_ARRAY, INT_ARRAY};
+        return array;
+    }
+
+    /**
      * Returns all TypeKinds except for ALL.
      *
      * @return list of TypeKind except for ALL
@@ -115,6 +137,7 @@ public enum TypeKind {
                 return new ArrayList<javax.lang.model.type.TypeKind>(
                         Arrays.asList(javax.lang.model.type.TypeKind.values()));
             }
+
             lst.add(mapTypeKind(type));
         }
 
@@ -132,6 +155,51 @@ public enum TypeKind {
         if (typeKind == TypeKind.ALL) {
             return null;
         }
+        if (typeKind.isArray()) {
+            return javax.lang.model.type.TypeKind.ARRAY;
+        }
         return javax.lang.model.type.TypeKind.valueOf(typeKind.name());
+    }
+
+    /**
+     * Returns {@code true} if this kind corresponds to a array type and {@code false} otherwise.
+     *
+     * @return {@code true} if this kind corresponds to a array type
+     */
+    public boolean isArray() {
+        switch (this) {
+            case ARRAY:
+            case BYTE_ARRAY:
+            case SHORT_ARRAY:
+            case CHAR_ARRAY:
+            case INT_ARRAY:
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Returns {@code true} if this kind corresponds to a primitive type and {@code false}
+     * otherwise.
+     *
+     * @return {@code true} if this kind corresponds to a primitive type
+     */
+    public boolean isPrimitive() {
+        switch (this) {
+            case BOOLEAN:
+            case BYTE:
+            case SHORT:
+            case INT:
+            case LONG:
+            case CHAR:
+            case FLOAT:
+            case DOUBLE:
+                return true;
+
+            default:
+                return false;
+        }
     }
 }

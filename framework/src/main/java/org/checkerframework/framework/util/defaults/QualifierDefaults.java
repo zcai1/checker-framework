@@ -31,6 +31,7 @@ import org.checkerframework.framework.qual.DefaultQualifiers;
 import org.checkerframework.framework.qual.TypeUseLocation;
 import org.checkerframework.framework.type.AnnotatedTypeFactory;
 import org.checkerframework.framework.type.AnnotatedTypeMirror;
+import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedArrayType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedDeclaredType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedExecutableType;
 import org.checkerframework.framework.type.AnnotatedTypeMirror.AnnotatedIntersectionType;
@@ -375,7 +376,7 @@ public class QualifierDefaults {
                     "Only one qualifier from a hierarchy can be the default. Existing: "
                             + previousDefaults
                             + " and new: "
-                            + (new Default(newAnno, newLoc, newTypes)));
+                            + new Default(newAnno, newLoc, newTypes));
         }
     }
 
@@ -400,17 +401,26 @@ public class QualifierDefaults {
         for (Default previous : previousDefaults) {
             Set<org.checkerframework.framework.qual.TypeKind> previousTypeSet =
                     new HashSet<>(Arrays.asList(previous.types));
-            if (!AnnotationUtils.areSame(newAnno, previous.anno)
-                    && previous.location == newLoc
-                    && (previousTypeSet.containsAll(newTypeSet)
-                            || previousTypeSet.contains(
-                                    org.checkerframework.framework.qual.TypeKind.ALL))) {
-                final AnnotationMirror previousTop = qualHierarchy.getTopAnnotation(previous.anno);
-                if (qualHierarchy.isSubtype(newAnno, previousTop)) {
-                    return true;
+            if (!AnnotationUtils.areSame(newAnno, previous.anno) && previous.location == newLoc) {
+                if (previousTypeSet.containsAll(newTypeSet)
+                        || previousTypeSet.contains(
+                                org.checkerframework.framework.qual.TypeKind.ALL)) {
+                    final AnnotationMirror previousTop =
+                            qualHierarchy.getTopAnnotation(previous.anno);
+                    if (qualHierarchy.isSubtype(newAnno, previousTop)) {
+                        return true;
+                    }
+                } else if (newTypeSet.containsAll(previousTypeSet)
+                        || newTypeSet.contains(org.checkerframework.framework.qual.TypeKind.ALL)) {
+                    newTypeSet.removeAll(previousTypeSet);
+                    newTypes =
+                            newTypeSet.toArray(
+                                    new org.checkerframework.framework.qual.TypeKind
+                                            [newTypeSet.size()]);
                 }
             }
         }
+
         return false;
     }
 
@@ -902,6 +912,17 @@ public class QualifierDefaults {
                                     && scope.getKind() == ElementKind.FIELD
                                     && t == type
                                     && mappedTk.contains(t.getKind())) {
+                                if (t.getKind() == TypeKind.ARRAY) {
+                                    AnnotatedTypeMirror compType =
+                                            ((AnnotatedArrayType) t).getComponentType();
+                                    while (compType.getKind() == TypeKind.ARRAY) {
+                                        compType =
+                                                ((AnnotatedArrayType) compType).getComponentType();
+                                    }
+                                    if (mappedTk.contains(compType.getKind())) {
+                                        addAnnotation(compType, qual);
+                                    }
+                                }
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -951,6 +972,17 @@ public class QualifierDefaults {
                                     && scope.getKind() == ElementKind.PARAMETER
                                     && t == type
                                     && mappedTk.contains(t.getKind())) {
+                                if (t.getKind() == TypeKind.ARRAY) {
+                                    AnnotatedTypeMirror compType =
+                                            ((AnnotatedArrayType) t).getComponentType();
+                                    while (compType.getKind() == TypeKind.ARRAY) {
+                                        compType =
+                                                ((AnnotatedArrayType) compType).getComponentType();
+                                    }
+                                    if (mappedTk.contains(compType.getKind())) {
+                                        addAnnotation(compType, qual);
+                                    }
+                                }
                                 addAnnotation(t, qual);
                             } else if (scope != null
                                     && (scope.getKind() == ElementKind.METHOD
