@@ -127,7 +127,7 @@ public enum TypeKind {
      * Map between list of {@link org.checkerframework.framework.qual.TypeKind} and list of {@link
      * javax.lang.model.type.TypeKind}.
      *
-     * @param typeKind the list of Checker Framework TypeKind
+     * @param typeKinds the list of Checker Framework TypeKind
      * @return the javax list of TypeKind
      */
     public static List<javax.lang.model.type.TypeKind> mapTypeKinds(TypeKind[] typeKinds) {
