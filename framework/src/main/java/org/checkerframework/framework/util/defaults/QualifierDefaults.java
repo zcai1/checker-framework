@@ -911,18 +911,19 @@ public class QualifierDefaults {
                             if (scope != null
                                     && scope.getKind() == ElementKind.FIELD
                                     && t == type
-                                    && mappedTk.contains(t.getKind())) {
-                                if (t.getKind() == TypeKind.ARRAY) {
-                                    AnnotatedTypeMirror compType =
-                                            ((AnnotatedArrayType) t).getComponentType();
-                                    while (compType.getKind() == TypeKind.ARRAY) {
-                                        compType =
-                                                ((AnnotatedArrayType) compType).getComponentType();
-                                    }
-                                    if (mappedTk.contains(compType.getKind())) {
-                                        addAnnotation(compType, qual);
-                                    }
+                                    && t.getKind() == TypeKind.ARRAY) {
+                                AnnotatedTypeMirror compType =
+                                        ((AnnotatedArrayType) t).getComponentType();
+                                while (compType.getKind() == TypeKind.ARRAY) {
+                                    compType = ((AnnotatedArrayType) compType).getComponentType();
                                 }
+                                if (mappedTk.contains(compType.getKind())) {
+                                    addAnnotation(compType, qual);
+                                }
+                            } else if (scope != null
+                                    && scope.getKind() == ElementKind.FIELD
+                                    && t == type
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             }
                             break;
@@ -971,18 +972,19 @@ public class QualifierDefaults {
                             if (scope != null
                                     && scope.getKind() == ElementKind.PARAMETER
                                     && t == type
-                                    && mappedTk.contains(t.getKind())) {
-                                if (t.getKind() == TypeKind.ARRAY) {
-                                    AnnotatedTypeMirror compType =
-                                            ((AnnotatedArrayType) t).getComponentType();
-                                    while (compType.getKind() == TypeKind.ARRAY) {
-                                        compType =
-                                                ((AnnotatedArrayType) compType).getComponentType();
-                                    }
-                                    if (mappedTk.contains(compType.getKind())) {
-                                        addAnnotation(compType, qual);
-                                    }
+                                    && t.getKind() == TypeKind.ARRAY) {
+                                AnnotatedTypeMirror compType =
+                                        ((AnnotatedArrayType) t).getComponentType();
+                                while (compType.getKind() == TypeKind.ARRAY) {
+                                    compType = ((AnnotatedArrayType) compType).getComponentType();
                                 }
+                                if (mappedTk.contains(compType.getKind())) {
+                                    addAnnotation(compType, qual);
+                                }
+                            } else if (scope != null
+                                    && scope.getKind() == ElementKind.PARAMETER
+                                    && t == type
+                                    && mappedTk.contains(t.getKind())) {
                                 addAnnotation(t, qual);
                             } else if (scope != null
                                     && (scope.getKind() == ElementKind.METHOD
