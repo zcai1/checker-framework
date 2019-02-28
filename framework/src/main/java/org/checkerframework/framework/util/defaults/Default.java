@@ -1,6 +1,10 @@
 package org.checkerframework.framework.util.defaults;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
+import org.checkerframework.framework.qual.TypeKind;
 import org.checkerframework.framework.qual.TypeUseLocation;
 import org.checkerframework.javacutil.AnnotationUtils;
 
@@ -15,19 +19,35 @@ public class Default implements Comparable<Default> {
     // please remember to add any fields to the hashcode calculation
     public final AnnotationMirror anno;
     public final TypeUseLocation location;
+    public final TypeKind[] types;
 
     public Default(final AnnotationMirror anno, final TypeUseLocation location) {
+        this(anno, location, TypeKind.all());
+    }
+
+    public Default(
+            final AnnotationMirror anno, final TypeUseLocation location, final TypeKind[] types) {
         this.anno = anno;
         this.location = location;
+        this.types = types;
     }
 
     @Override
     public int compareTo(Default other) {
         int locationOrder = location.compareTo(other.location);
-        if (locationOrder == 0) {
+        int typesOrder = 1;
+        Set<TypeKind> thisTypeSet = new HashSet<>(Arrays.asList(types));
+        Set<TypeKind> otherTypeSet = new HashSet<>(Arrays.asList(other.types));
+        if (thisTypeSet.containsAll(otherTypeSet)
+                || thisTypeSet.contains(TypeKind.ALL)
+                || otherTypeSet.containsAll(thisTypeSet)
+                || otherTypeSet.contains(TypeKind.ALL)) {
+            typesOrder = 0;
+        }
+        if (locationOrder == 0 && typesOrder == 0) {
             return AnnotationUtils.annotationOrdering().compare(anno, other.anno);
         } else {
-            return locationOrder;
+            return (locationOrder * typesOrder) + (locationOrder + typesOrder);
         }
     }
 
@@ -46,7 +66,11 @@ public class Default implements Comparable<Default> {
 
     @Override
     public int hashCode() {
-        return 13
+        int hashcode = 13;
+        for (TypeKind t : types) {
+            hashcode += t.hashCode();
+        }
+        return hashcode
                 + (anno == null ? 0 : 37 * anno.hashCode())
                 + (location == null ? 0 : 41 * location.hashCode());
     }

@@ -7,7 +7,11 @@ import java.lang.annotation.Target;
 
 /**
  * A meta-annotation that specifies the trees and types for which the framework should automatically
- * add that qualifier. These types and trees can be specified via a combination of attributes.
+ * add that qualifier. These types (typeKinds and classes) and trees (literalKinds and strings) can
+ * be specified via a combination of attributes.
+ *
+ * <p>implicit anno <= (literal v string patterns) v (types v type names) Since every annotable
+ * places falls into one or more of these four categories.
  *
  * <p>For example, the {@code Nullable} annotation is annotated with
  *

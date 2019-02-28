@@ -8,7 +8,11 @@ import java.lang.annotation.Target;
 
 /**
  * Applied to the declaration of a type qualifier, specifies that the given annotation should be the
- * default for unannotated type uses (in bytecode or source code) at the given location(s).
+ * default for unannotated type uses (in bytecode or source code) at the given location(s) with the
+ * given type(s).
+ *
+ * <p>default anno <= location ^ types Since every annotable places is defined by a type and a
+ * location.
  *
  * <p>Unchecked code defaults are only applied if they are enabled via the {@code
  * -AuseDefaultsForUncheckedCode} command-line option. They can be enabled for source and bytecode
@@ -32,4 +36,7 @@ import java.lang.annotation.Target;
 public @interface DefaultInUncheckedCodeFor {
     /** @return the locations to which the annotation should be applied */
     TypeUseLocation[] value();
+
+    /** @return {@link TypeKind}s of types for which an annotation should be added */
+    TypeKind[] types() default {TypeKind.ALL};
 }

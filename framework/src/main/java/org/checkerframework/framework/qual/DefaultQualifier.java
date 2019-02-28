@@ -51,4 +51,7 @@ public @interface DefaultQualifier {
 
     /** @return the locations to which the annotation should be applied */
     TypeUseLocation[] locations() default {TypeUseLocation.ALL};
+
+    /** @return {@link TypeKind}s of types for which an annotation should be added */
+    TypeKind[] types() default {TypeKind.ALL};
 }
