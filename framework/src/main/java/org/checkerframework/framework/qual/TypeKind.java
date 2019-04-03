@@ -110,6 +110,10 @@ public enum TypeKind {
      */
     public static List<javax.lang.model.type.TypeKind> mapTypeKinds(TypeKind[] typeKinds) {
         List<javax.lang.model.type.TypeKind> lst = new ArrayList<>();
+        if (typeKinds == null) {
+            return lst;
+        }
+
         for (TypeKind type : typeKinds) {
             if (type.equals(ALL)) {
                 return new ArrayList<javax.lang.model.type.TypeKind>(

@@ -1241,7 +1241,7 @@ public class BaseTypeVisitor<Factory extends GenericAnnotatedTypeFactory<?, ?, ?
      * supertype of the return type of "super()" invocation within that constructor (except for the
      * Initialization and Rawness Checkers).
      */
-    protected void checkSuperConstructorCall(MethodInvocationTree node) {
+    void checkSuperConstructorCall(MethodInvocationTree node) {
         if (!TreeUtils.isSuperCall(node)) {
             return;
         }

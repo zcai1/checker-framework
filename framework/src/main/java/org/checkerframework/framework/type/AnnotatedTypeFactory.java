@@ -2413,7 +2413,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * both the default and explicit ({@code allAnnotations}) annotations of this tree.
      */
     // TODO: This is a hack.  Remove this method when http://tinyurl.com/cfissue/2324 is fixed.
-    protected Set<AnnotationMirror> getExplicitAnnotationsOnNewClassTree(
+    Set<AnnotationMirror> getExplicitAnnotationsOnNewClassTree(
             NewClassTree newClassTree, Set<? extends AnnotationMirror> allAnnotations) {
         // The following code extracts explicit annotations from "newClassTree" using string
         // manipulations.
