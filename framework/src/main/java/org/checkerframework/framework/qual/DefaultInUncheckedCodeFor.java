@@ -11,8 +11,8 @@ import java.lang.annotation.Target;
  * default for unannotated type uses (in bytecode or source code) at the given location(s) with the
  * given type(s).
  *
- * <p>default anno {@literal <=} location ^ types Since every annotable places is defined by a type and a
- * location.
+ * <p>default anno {@literal <=} location ^ types Since every annotable places is defined by a type
+ * and a location.
  *
  * <p>Unchecked code defaults are only applied if they are enabled via the {@code
  * -AuseDefaultsForUncheckedCode} command-line option. They can be enabled for source and bytecode

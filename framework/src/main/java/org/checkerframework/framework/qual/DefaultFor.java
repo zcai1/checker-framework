@@ -10,8 +10,8 @@ import java.lang.annotation.Target;
  * Applied to the declaration of a type qualifier specifies that the given annotation should be the
  * default for particular types at a particular location.
  *
- * <p>default anno {@literal <=} location ^ types Since every annotable places is defined by a type and a
- * location.
+ * <p>default anno {@literal <=} location ^ types Since every annotable places is defined by a type
+ * and a location.
  *
  * <p>TODO: Document use relative to the other annotations. This qualifier is for type system
  * developers, not end-users.
