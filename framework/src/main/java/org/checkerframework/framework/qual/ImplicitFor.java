@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
  * add that qualifier. These types (typeKinds and classes) and trees (literalKinds and strings) can
  * be specified via a combination of attributes.
  *
- * <p>implicit anno <= (literal v string patterns) v (types v type names) Since every annotable
+ * <p>implicit anno {@literal <=} (literal v string patterns) v (types v type names) Since every annotable
  * places falls into one or more of these four categories.
  *
  * <p>For example, the {@code Nullable} annotation is annotated with
