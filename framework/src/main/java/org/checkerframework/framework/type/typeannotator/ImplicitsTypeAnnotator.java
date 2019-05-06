@@ -82,6 +82,7 @@ public class ImplicitsTypeAnnotator extends TypeAnnotator {
         }
     }
 
+    /** Add the mapping from the type of object to a Annotation Mirror */
     public void addTypeKind(TypeKind typeKind, AnnotationMirror theQual) {
         boolean res = qualHierarchy.updateMappingToMutableSet(typeKinds, typeKind, theQual);
         if (!res) {
