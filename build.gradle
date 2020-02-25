@@ -119,6 +119,7 @@ allprojects {
     dependencies {
         if (isJava8) {
             javacJar group: 'com.google.errorprone', name: 'javac', version: "$errorproneJavacVersion"
+            compileOnly configurations.javacJar
         }
 
         errorproneJavac("com.google.errorprone:javac:$errorproneJavacVersion")
@@ -211,9 +212,6 @@ allprojects {
 
             options.encoding = 'UTF-8'
             options.fork = true
-            if (isJava8) {
-                options.forkOptions.jvmArgs += ["-Xbootclasspath/p:${configurations.javacJar.asPath}"]
-            }
             // Don't use error-prone by default
             options.errorprone.enabled = false
         }
