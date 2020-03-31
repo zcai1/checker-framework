@@ -615,33 +615,23 @@ public class PluginUtil {
     }
 
     /**
-     * Determine the version of the JRE that we are currently running and select a jdkX where X is
-     * the version of Java that is being run (e.g. 8, 9, ...)
+     * Determine the version of the JRE that we are currently running and select a jdkX.jar, if it
+     * exists, where X is the version of Java that is being run (e.g. 8, 9, ...)
      *
-     * @return "jdk<em>X</em>" where X is the version of Java that is being run (e.g. 8, 9, ...)
+     * @return the jdkX.jar where X is the version of Java that is being run (e.g. 8, 9, ...), or
+     *     null if such file does not exist
      */
-    public static String getJdkJarPrefix() {
+    public static @Nullable String getJdkJarName() {
         final int jreVersion = getJreVersion();
-        final String prefix;
 
         if (jreVersion < 8) {
             throw new AssertionError("Unsupported JRE version: " + jreVersion);
-        } else {
-            prefix = "jdk" + jreVersion;
+        } else if (jreVersion > 8) {
+            // Currently, we only have jdk8.jar
+            return null;
         }
 
-        return prefix;
-    }
-
-    /**
-     * Determine the version of the JRE that we are currently running and select a jdkX.jar where X
-     * is the version of Java that is being run (e.g. 8, 9, ...)
-     *
-     * @return the jdkX.jar where X is the version of Java that is being run (e.g. 8, 9, ...)
-     */
-    public static String getJdkJarName() {
-        final String fileName = getJdkJarPrefix() + ".jar";
-        return fileName;
+        return "jdk" + jreVersion + ".jar";
     }
 
     /**

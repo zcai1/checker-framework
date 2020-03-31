@@ -17,6 +17,7 @@ import java.util.jar.JarInputStream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.javacutil.BugInCF;
 import org.checkerframework.javacutil.PluginUtil;
 
@@ -59,7 +60,7 @@ public class CheckerMain {
     }
 
     /** The path to the annotated jdk jar to use. */
-    protected final File jdkJar;
+    protected final @Nullable File jdkJar;
 
     /** The path to the javacJar to use. */
     protected final File javacJar;
@@ -111,8 +112,13 @@ public class CheckerMain {
                 extractFileArg(PluginUtil.JAVAC_PATH_OPT, new File(searchPath, "javac.jar"), args);
 
         final String jdkJarName = PluginUtil.getJdkJarName();
-        this.jdkJar =
-                extractFileArg(PluginUtil.JDK_PATH_OPT, new File(searchPath, jdkJarName), args);
+        final File alternativeJdkJar;
+        if (jdkJarName != null) {
+            alternativeJdkJar = new File(searchPath, jdkJarName);
+        } else {
+            alternativeJdkJar = null;
+        }
+        this.jdkJar = extractFileArg(PluginUtil.JDK_PATH_OPT, alternativeJdkJar, args);
 
         this.compilationBootclasspath = createCompilationBootclasspath(args);
         this.runtimeClasspath = createRuntimeClasspath(args);
@@ -161,7 +167,7 @@ public class CheckerMain {
      */
     protected List<String> createCompilationBootclasspath(final List<String> argsList) {
         final List<String> extractedBcp = extractBootClassPath(argsList);
-        if (PluginUtil.getJreVersion() == 8) {
+        if (jdkJar != null && PluginUtil.getJreVersion() == 8) {
             extractedBcp.add(0, jdkJar.getAbsolutePath());
         }
 
