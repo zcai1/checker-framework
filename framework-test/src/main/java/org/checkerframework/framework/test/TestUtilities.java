@@ -446,6 +446,7 @@ public class TestUtilities {
 
     /**
      * Test
+     *
      * @return bool
      */
     public static boolean getShouldEmitDebugInfo() {

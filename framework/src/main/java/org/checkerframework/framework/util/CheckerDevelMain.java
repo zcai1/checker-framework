@@ -6,9 +6,7 @@ import java.util.Arrays;
 import java.util.List;
 import org.checkerframework.javacutil.SystemUtil;
 
-/**
- * test
- */
+/** test */
 public class CheckerDevelMain extends CheckerMain {
 
     private static final String PROP_PREFIX = "CheckerDevelMain";
