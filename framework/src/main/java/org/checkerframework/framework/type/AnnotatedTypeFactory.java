@@ -24,38 +24,7 @@ import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.Trees;
 import com.sun.tools.javac.code.Type;
-import java.lang.annotation.Annotation;
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Target;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Name;
-import javax.lang.model.element.PackageElement;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.IntersectionType;
-import javax.lang.model.type.PrimitiveType;
-import javax.lang.model.type.TypeKind;
-import javax.lang.model.type.TypeMirror;
-import javax.lang.model.type.TypeVariable;
-import javax.lang.model.type.WildcardType;
-import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
+
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.common.basetype.BaseTypeChecker;
 import org.checkerframework.common.basetype.BaseTypeVisitor;
@@ -107,6 +76,40 @@ import org.checkerframework.javacutil.TreeUtils;
 import org.checkerframework.javacutil.TypesUtils;
 import org.checkerframework.javacutil.UserError;
 import org.checkerframework.javacutil.trees.DetachedVarSymbol;
+
+import java.lang.annotation.Annotation;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Target;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Name;
+import javax.lang.model.element.PackageElement;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.IntersectionType;
+import javax.lang.model.type.PrimitiveType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.TypeVariable;
+import javax.lang.model.type.WildcardType;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
 
 /**
  * The methods of this class take an element or AST node, and return the annotated type as an {@link
@@ -290,13 +293,15 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             if (copyElements) {
                 if (!(canonical == null && canonicalName != null && ignorableElements != null)) {
                     throw new BugInCF(
-                            "Bad Alias for %s: [canonical=%s] copyElements=%s canonicalName=%s ignorableElements=%s",
+                            "Bad Alias for %s: [canonical=%s] copyElements=%s canonicalName=%s"
+                                    + " ignorableElements=%s",
                             aliasName, canonical, copyElements, canonicalName, ignorableElements);
                 }
             } else {
                 if (!(canonical != null && canonicalName == null && ignorableElements == null)) {
                     throw new BugInCF(
-                            "Bad Alias for %s: canonical=%s copyElements=%s [canonicalName=%s ignorableElements=%s]",
+                            "Bad Alias for %s: canonical=%s copyElements=%s [canonicalName=%s"
+                                    + " ignorableElements=%s]",
                             aliasName, canonical, copyElements, canonicalName, ignorableElements);
                 }
             }
@@ -618,7 +623,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
             MethodValChecker methodValChecker = checker.getSubchecker(MethodValChecker.class);
             assert methodValChecker != null
-                    : "AnnotatedTypeFactory: reflection resolution was requested, but MethodValChecker isn't a subchecker.";
+                    : "AnnotatedTypeFactory: reflection resolution was requested, but"
+                            + " MethodValChecker isn't a subchecker.";
             MethodValAnnotatedTypeFactory methodValATF =
                     (MethodValAnnotatedTypeFactory) methodValChecker.getAnnotationProvider();
 
@@ -723,16 +729,19 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                     throw new BugInCF(
                             "AnnotatedTypeFactory: "
                                     + typeQualifier
-                                    + " is polymorphic and specifies super qualifiers. "
-                                    + "Remove the @org.checkerframework.framework.qual.SubtypeOf or @org.checkerframework.framework.qual.PolymorphicQualifier annotation from it.");
+                                    + " is polymorphic and specifies super qualifiers. Remove the"
+                                    + " @org.checkerframework.framework.qual.SubtypeOf or"
+                                    + " @org.checkerframework.framework.qual.PolymorphicQualifier"
+                                    + " annotation from it.");
                 }
                 continue;
             }
             if (typeQualifier.getAnnotation(SubtypeOf.class) == null) {
                 throw new BugInCF(
-                        "AnnotatedTypeFactory: %s does not specify its super qualifiers.%n"
-                                + "Add an @org.checkerframework.framework.qual.SubtypeOf annotation to it,%n"
-                                + "or if it is an alias, exclude it from `createSupportedTypeQualifiers()`.%n",
+                        "AnnotatedTypeFactory: %s does not specify its super qualifiers.%nAdd an"
+                                + " @org.checkerframework.framework.qual.SubtypeOf annotation to"
+                                + " it,%nor if it is an alias, exclude it from"
+                                + " `createSupportedTypeQualifiers()`.%n",
                         typeQualifier);
             }
             Class<? extends Annotation>[] superQualifiers =
@@ -1767,7 +1776,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                 TypeElement typeElt = ElementUtils.enclosingClass(element);
                 if (typeElt == null) {
                     throw new BugInCF(
-                            "AnnotatedTypeFactory.getImplicitReceiver: enclosingClass()==null for element: "
+                            "AnnotatedTypeFactory.getImplicitReceiver: enclosingClass()==null for"
+                                    + " element: "
                                     + element);
                 }
                 if (tree.getKind() == Kind.NEW_CLASS) {
@@ -2120,9 +2130,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             for (AnnotatedTypeVariable tv : methodType.getTypeVariables()) {
                 if (typeVarMapping.get(tv.getUnderlyingType()) == null) {
                     throw new BugInCF(
-                            "AnnotatedTypeFactory.methodFromUse:"
-                                    + "mismatch between declared method type variables and the inferred method type arguments. "
-                                    + "Method type variables: "
+                            "AnnotatedTypeFactory.methodFromUse:mismatch between declared method"
+                                + " type variables and the inferred method type arguments. Method"
+                                + " type variables: "
                                     + methodType.getTypeVariables()
                                     + "; "
                                     + "Inferred method type arguments: "
@@ -3918,8 +3928,9 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                     // We should never reach here: isFunctionalInterface performs the same check
                     // and would have raised an error already.
                     throw new BugInCF(
-                            "Expected the type of a cast tree in an assignment context to contain a functional interface bound. "
-                                    + "Found type: %s for tree: %s in lambda tree: %s",
+                            "Expected the type of a cast tree in an assignment context to contain"
+                                + " a functional interface bound. Found type: %s for tree: %s in"
+                                + " lambda tree: %s",
                             castATM, cast, tree);
                 }
                 return castATM;
@@ -4043,8 +4054,8 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                 }
             }
             throw new BugInCF(
-                    "Expected the type of %s tree in assignment context to be a functional interface. "
-                            + "Found type: %s for tree: %s in lambda tree: %s",
+                    "Expected the type of %s tree in assignment context to be a functional"
+                            + " interface. Found type: %s for tree: %s in lambda tree: %s",
                     contextTree.getKind(), type, contextTree, tree);
         }
         return true;
