@@ -16,7 +16,7 @@ CHANGED_JAVA_FILES=`git diff --staged --name-only --diff-filter=ACM | grep '\.ja
 # echo CHANGED_JAVA_FILES "'"${CHANGED_JAVA_FILES}"'"
 if [ ! -z "$CHANGED_JAVA_FILES" ]; then
     # Only check formatting under JDK >= 11, to use consistent version of GJF.
-    JAVA_VER=`java -version 2>&1 | grep -o \"[[:digit:]]*\.[[:digit:]]*.*\" | grep \"11\.` || true
+    JAVA_VER=`java -version 2>&1 | grep -o \"[[:digit:]]*\.[[:digit:]]*.*\" | grep \"1[1-9]\.` || true
     if [ -z "$JAVA_VER" ]; then
         echo "Problem in pre-commit: JDK >= 11 is required to run reformatting!" && /bin/false
     fi
