@@ -3,6 +3,7 @@ package org.checkerframework.framework.type;
 // The imports from com.sun are all @jdk.Exported and therefore somewhat safe to use.
 // Try to avoid using non-@jdk.Exported classes.
 
+import com.sun.source.tree.AnnotatedTypeTree;
 import com.sun.source.tree.AnnotationTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.ClassTree;
@@ -16,6 +17,7 @@ import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.NewArrayTree;
 import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
@@ -2373,9 +2375,26 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                     (AnnotatedDeclaredType) toAnnotatedType(TreeUtils.typeOf(newClassTree), false);
             // If newClassTree creates an anonymous class, then annotations in this location:
             //   new @HERE Class() {}
-            // are on not on the identifier newClassTree, but rather on the modifier newClassTree.
+            // are not on the identifier newClassTree, but rather on the modifier newClassTree.
             List<? extends AnnotationTree> annos =
                     newClassTree.getClassBody().getModifiers().getAnnotations();
+
+            // If newClassTree creates an anonymous class from an inner class or inner interface,
+            // then annotations in this location:
+            //   new OuterI.@HERE InnerI(){}
+            // are not on the anonymous class modifier, but rather on the type identifier of the
+            // newClassTree.
+            if (annos.isEmpty()) {
+                Tree node = newClassTree.getIdentifier();
+                if (node instanceof ParameterizedTypeTree) {
+                    node = ((ParameterizedTypeTree) node).getType();
+                }
+
+                if (node instanceof AnnotatedTypeTree) {
+                    annos = ((AnnotatedTypeTree) node).getAnnotations();
+                }
+            }
+
             type.addAnnotations(TreeUtils.annotationsFromTypeAnnotationTrees(annos));
             type.setEnclosingType(enclosingType);
             return type;
