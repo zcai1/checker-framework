@@ -367,6 +367,12 @@ import org.plumelib.util.UtilPlume;
   // -Acfgviz=MyClass,verbose
   "verbosecfg",
 
+  // Directory for .txt files generated from the type refinement visualization in
+  // org.checkerframework.dataflow.util.TypeRefinementVisualizer
+  // as initialized by
+  // org.checkerframework.framework.type.GenericAnnotatedTypeFactory.createTypeRefinementVisualizer()
+  "flowtrdir",
+
   /// Caches
 
   // Set the cache size for caches in AnnotatedTypeFactory

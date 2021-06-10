@@ -1,0 +1,104 @@
+package org.checkerframework.dataflow.util;
+
+import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.LineMap;
+import com.sun.source.util.Trees;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.net.URI;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.checkerframework.dataflow.analysis.AbstractValue;
+import org.checkerframework.dataflow.analysis.AnalysisResult;
+import org.checkerframework.dataflow.analysis.Store;
+import org.checkerframework.dataflow.cfg.node.LocalVariableNode;
+import org.checkerframework.dataflow.cfg.node.Node;
+import org.checkerframework.javacutil.BugInCF;
+
+public class TypeRefinementVisualizer {
+  /** The line separator. */
+  private final String lineSeparator = System.lineSeparator();
+
+  /** The output directory. */
+  private final String outDir;
+
+  private final String storedMapping;
+
+  /** The (optional) checker name. Used as a part of the name of the output dot file. */
+  //  private @Nullable String checkerName;
+
+  private final Map<URI, String> srcToOutput = new HashMap<>();
+
+  public TypeRefinementVisualizer(String outDir, @Nullable String checkerName) {
+    this.outDir = outDir;
+    this.storedMapping = outDir + "/fileMapping-" + checkerName + ".txt";
+    //    this.checkerName = checkerName;
+  }
+
+  public void visualize(
+      CompilationUnitTree root,
+      Trees trees,
+      AnalysisResult<? extends AbstractValue<?>, ? extends Store<?>> analysisResult) {
+    String outputPath = getOutputPath(root);
+
+    try (BufferedWriter out = new BufferedWriter(new FileWriter(outputPath, true))) {
+      for (Map.Entry<Node, ?> entry : analysisResult.getNodeValues().entrySet()) {
+        if (entry.getKey() instanceof LocalVariableNode) {
+          LocalVariableNode node = (LocalVariableNode) entry.getKey();
+          String identifier = node.getName();
+          long pos = trees.getSourcePositions().getStartPosition(root, node.getTree());
+          LineMap lineMap = root.getLineMap();
+
+          out.write(String.valueOf(lineMap.getLineNumber(pos)));
+          out.write(',');
+          out.write(String.valueOf(lineMap.getColumnNumber(pos)));
+          out.write(',');
+          out.write(identifier);
+          out.write(',');
+          out.write(entry.getValue().toString());
+          out.write(lineSeparator);
+        }
+      }
+    } catch (IOException e) {
+      throw new BugInCF(e);
+    }
+  }
+
+  private String getOutputPath(CompilationUnitTree root) {
+    URI srcUri = root.getSourceFile().toUri();
+    if (!"file".equalsIgnoreCase(srcUri.getScheme())) {
+      throw new BugInCF("Unexpected source file uri: " + srcUri);
+    }
+
+    if (srcToOutput.containsKey(srcUri)) {
+      return outDir + "/" + srcToOutput.get(srcUri);
+    }
+
+    String outputName = UUID.randomUUID() + ".txt";
+    String outputPath = outDir + "/" + outputName;
+
+    try (BufferedWriter out = new BufferedWriter(new FileWriter(outputPath))) {
+      out.write('[');
+      out.write(srcUri.toString());
+      out.write(']');
+      out.write(lineSeparator);
+    } catch (IOException e) {
+      throw new BugInCF(e);
+    }
+
+    try (BufferedWriter out = new BufferedWriter(new FileWriter(storedMapping, true))) {
+      out.write(srcUri.toString());
+      out.write(',');
+      out.write(outputName);
+      out.write(lineSeparator);
+    } catch (IOException e) {
+      throw new BugInCF(e);
+    }
+
+    srcToOutput.put(srcUri, outputName);
+    return outputPath;
+  }
+}
