@@ -10,7 +10,6 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.dataflow.analysis.AbstractValue;
 import org.checkerframework.dataflow.analysis.AnalysisResult;
 import org.checkerframework.dataflow.analysis.Store;
@@ -25,17 +24,15 @@ public class TypeRefinementVisualizer {
   /** The output directory. */
   private final String outDir;
 
+  /** Path of the file that stores a mapping from source file to output file. */
   private final String storedMapping;
 
-  /** The (optional) checker name. Used as a part of the name of the output dot file. */
-  //  private @Nullable String checkerName;
-
+  /** Mapping from source file URI to output file name. */
   private final Map<URI, String> srcToOutput = new HashMap<>();
 
-  public TypeRefinementVisualizer(String outDir, @Nullable String checkerName) {
+  public TypeRefinementVisualizer(String outDir, String checkerName) {
     this.outDir = outDir;
     this.storedMapping = outDir + "/fileMapping-" + checkerName + ".txt";
-    //    this.checkerName = checkerName;
   }
 
   public void visualize(
@@ -46,21 +43,23 @@ public class TypeRefinementVisualizer {
 
     try (BufferedWriter out = new BufferedWriter(new FileWriter(outputPath, true))) {
       for (Map.Entry<Node, ?> entry : analysisResult.getNodeValues().entrySet()) {
-        if (entry.getKey() instanceof LocalVariableNode) {
-          LocalVariableNode node = (LocalVariableNode) entry.getKey();
-          String identifier = node.getName();
-          long pos = trees.getSourcePositions().getStartPosition(root, node.getTree());
-          LineMap lineMap = root.getLineMap();
+        // Only consider types of local variables.
+        if (!(entry.getKey() instanceof LocalVariableNode)) continue;
 
-          out.write(String.valueOf(lineMap.getLineNumber(pos)));
-          out.write(',');
-          out.write(String.valueOf(lineMap.getColumnNumber(pos)));
-          out.write(',');
-          out.write(identifier);
-          out.write(',');
-          out.write(entry.getValue().toString());
-          out.write(lineSeparator);
-        }
+        LocalVariableNode node = (LocalVariableNode) entry.getKey();
+        String identifier = node.getName();
+        long startPos = trees.getSourcePositions().getStartPosition(root, node.getTree());
+        LineMap lineMap = root.getLineMap();
+
+        // TODO(Zhiping): the start position is not necessarily pointing to the identifier
+        out.write(String.valueOf(lineMap.getLineNumber(startPos)));
+        out.write(',');
+        out.write(String.valueOf(lineMap.getColumnNumber(startPos)));
+        out.write(',');
+        out.write(identifier);
+        out.write(',');
+        out.write(entry.getValue().toString());
+        out.write(lineSeparator);
       }
     } catch (IOException e) {
       throw new BugInCF(e);
@@ -77,9 +76,11 @@ public class TypeRefinementVisualizer {
       return outDir + "/" + srcToOutput.get(srcUri);
     }
 
+    // If there's no existing mapping, create a new file name with UUID.
     String outputName = UUID.randomUUID() + ".txt";
     String outputPath = outDir + "/" + outputName;
 
+    // Create the new file and write "[<Source File URI>]".
     try (BufferedWriter out = new BufferedWriter(new FileWriter(outputPath))) {
       out.write('[');
       out.write(srcUri.toString());
@@ -89,6 +90,7 @@ public class TypeRefinementVisualizer {
       throw new BugInCF(e);
     }
 
+    // Write the new mapping to storedMapping.
     try (BufferedWriter out = new BufferedWriter(new FileWriter(storedMapping, true))) {
       out.write(srcUri.toString());
       out.write(',');
