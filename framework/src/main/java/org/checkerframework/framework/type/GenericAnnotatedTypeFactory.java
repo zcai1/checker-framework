@@ -37,6 +37,7 @@ import org.checkerframework.dataflow.cfg.node.MethodInvocationNode;
 import org.checkerframework.dataflow.cfg.node.Node;
 import org.checkerframework.dataflow.cfg.node.ObjectCreationNode;
 import org.checkerframework.dataflow.cfg.node.ReturnNode;
+import org.checkerframework.dataflow.util.TypeRefinementVisualizer;
 import org.checkerframework.framework.flow.CFAbstractAnalysis;
 import org.checkerframework.framework.flow.CFAbstractStore;
 import org.checkerframework.framework.flow.CFAbstractTransfer;
@@ -218,6 +219,8 @@ public abstract class GenericAnnotatedTypeFactory<
         this.initializationStaticStore = null;
 
         this.cfgVisualizer = createCFGVisualizer();
+
+        this.typeRefinementVisualizer = createTypeRefinementVisualizer();
 
         if (shouldCache) {
             int cacheSize = getCacheSize();
@@ -1210,7 +1213,8 @@ public abstract class GenericAnnotatedTypeFactory<
 
     /**
      * Analyze the AST {@code ast} and store the result. Additional operations that should be
-     * performed after analysis should be implemented in {@link #postAnalyze(ControlFlowGraph)}.
+     * performed after analysis should be implemented in {@link #postAnalyze(ControlFlowGraph,
+     * AnalysisResult)}.
      *
      * @param queue the queue for encountered class trees and their initial stores
      * @param lambdaQueue the queue for encountered lambda expression trees and their initial stores
@@ -1222,7 +1226,8 @@ public abstract class GenericAnnotatedTypeFactory<
      * @param updateInitializationStore should the initialization store be updated
      * @param isStatic are we analyzing a static construct
      * @param capturedStore the input Store to use for captured variables, e.g. in a lambda
-     * @see #postAnalyze(org.checkerframework.dataflow.cfg.ControlFlowGraph)
+     * @see #postAnalyze(org.checkerframework.dataflow.cfg.ControlFlowGraph,
+     *     org.checkerframework.dataflow.util.TypeRefinementVisualizer)
      */
     protected void analyze(
             Queue<Pair<ClassTree, Store>> queue,
@@ -1311,7 +1316,7 @@ public abstract class GenericAnnotatedTypeFactory<
             lambdaQueue.add(Pair.of(lambda, getStoreBefore(lambda)));
         }
 
-        postAnalyze(cfg);
+        postAnalyze(cfg, result);
     }
 
     /**
@@ -1326,8 +1331,12 @@ public abstract class GenericAnnotatedTypeFactory<
      *     com.sun.source.tree.ClassTree, boolean, boolean, boolean,
      *     org.checkerframework.framework.flow.CFAbstractStore)
      */
-    protected void postAnalyze(ControlFlowGraph cfg) {
+    protected void postAnalyze(ControlFlowGraph cfg, AnalysisResult<Value, Store> analysisResult) {
         handleCFGViz(cfg);
+
+        if (checker.hasOption("flowtrdir")) {
+            typeRefinementVisualizer.visualize(root, trees, analysisResult);
+        }
     }
 
     /**
@@ -1781,6 +1790,15 @@ public abstract class GenericAnnotatedTypeFactory<
             return res;
         }
         // Nobody expected to use cfgVisualizer if neither option given.
+        return null;
+    }
+
+    protected final TypeRefinementVisualizer typeRefinementVisualizer;
+
+    private @Nullable TypeRefinementVisualizer createTypeRefinementVisualizer() {
+        if (checker.hasOption("flowtrdir")) {
+            return new TypeRefinementVisualizer(checker.getOption("flowtrdir"), getCheckerName());
+        }
         return null;
     }
 
