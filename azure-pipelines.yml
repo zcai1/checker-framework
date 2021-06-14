@@ -19,6 +19,11 @@ jobs:
     fetchDepth: 25
   - bash: ./checker/bin-devel/test-cftests-all.sh
     displayName: test-cftests-all.sh
+  - task: PublishPipelineArtifact@1
+    inputs:
+      targetPath: ./checker/dist
+      artifactName: cf_jdk8
+      artifactType: pipeline
 - job: all_tests_jdk11
   pool:
     vmImage: 'ubuntu-latest'
@@ -28,6 +33,11 @@ jobs:
     fetchDepth: 25
   - bash: ./checker/bin-devel/test-cftests-all.sh
     displayName: test-cftests-all.sh
+  - task: PublishPipelineArtifact@1
+    inputs:
+      targetPath: ./checker/dist
+      artifactName: cf_jdk11
+      artifactType: pipeline
 - job: misc_jdk11
   pool:
     vmImage: 'ubuntu-latest'
