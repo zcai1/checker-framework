@@ -44,7 +44,8 @@ public class TypeRefinementVisualizer {
         String outputPath = getOutputPath(root);
 
         try (BufferedWriter out = new BufferedWriter(new FileWriter(outputPath, true))) {
-            for (Map.Entry<Node, ?> entry : analysisResult.getNodeValues().entrySet()) {
+            for (Map.Entry<Node, ? extends AbstractValue<?>> entry :
+                    analysisResult.getNodeValues().entrySet()) {
                 // Only consider types of local variables.
                 if (!(entry.getKey() instanceof LocalVariableNode)) continue;
 
