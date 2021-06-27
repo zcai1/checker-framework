@@ -172,10 +172,6 @@ public class AnalysisResult<V extends AbstractValue<V>, S extends Store<S>> {
         return nodeValues.get(n);
     }
 
-    public IdentityHashMap<Node, V> getNodeValues() {
-        return new IdentityHashMap<>(nodeValues);
-    }
-
     /**
      * Returns the abstract value for {@link Tree} {@code t}, or {@code null} if no information is
      * available. Note that if the analysis has not finished yet, this value might not represent the
