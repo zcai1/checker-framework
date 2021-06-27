@@ -348,11 +348,10 @@ import javax.tools.Diagnostic.Kind;
     // -Acfgviz=MyClass,verbose
     "verbosecfg",
 
-    // Directory for .txt files generated from the type refinement visualization in
-    // org.checkerframework.dataflow.util.TypeRefinementVisualizer
-    // as initialized by
-    // org.checkerframework.framework.type.GenericAnnotatedTypeFactory.createTypeRefinementVisualizer()
-    "flowtrdir",
+    /// LSP Support
+
+    // Whether to print refined types for local variables
+    "printTypeRefinements",
 
     /// Caches
 

@@ -37,7 +37,6 @@ import org.checkerframework.dataflow.cfg.node.MethodInvocationNode;
 import org.checkerframework.dataflow.cfg.node.Node;
 import org.checkerframework.dataflow.cfg.node.ObjectCreationNode;
 import org.checkerframework.dataflow.cfg.node.ReturnNode;
-import org.checkerframework.dataflow.util.TypeRefinementVisualizer;
 import org.checkerframework.framework.flow.CFAbstractAnalysis;
 import org.checkerframework.framework.flow.CFAbstractStore;
 import org.checkerframework.framework.flow.CFAbstractTransfer;
@@ -71,6 +70,7 @@ import org.checkerframework.framework.type.typeannotator.TypeAnnotator;
 import org.checkerframework.framework.util.AnnotatedTypes;
 import org.checkerframework.framework.util.FlowExpressionParseUtil;
 import org.checkerframework.framework.util.FlowExpressionParseUtil.FlowExpressionParseException;
+import org.checkerframework.framework.util.TypeRefinementVisualizer;
 import org.checkerframework.framework.util.defaults.QualifierDefaults;
 import org.checkerframework.framework.util.dependenttypes.DependentTypesHelper;
 import org.checkerframework.framework.util.dependenttypes.DependentTypesTreeAnnotator;
@@ -1227,7 +1227,7 @@ public abstract class GenericAnnotatedTypeFactory<
      * @param isStatic are we analyzing a static construct
      * @param capturedStore the input Store to use for captured variables, e.g. in a lambda
      * @see #postAnalyze(org.checkerframework.dataflow.cfg.ControlFlowGraph,
-     *     org.checkerframework.dataflow.util.TypeRefinementVisualizer)
+     *     org.checkerframework.dataflow.analysis.AnalysisResult)
      */
     protected void analyze(
             Queue<Pair<ClassTree, Store>> queue,
@@ -1334,8 +1334,8 @@ public abstract class GenericAnnotatedTypeFactory<
     protected void postAnalyze(ControlFlowGraph cfg, AnalysisResult<Value, Store> analysisResult) {
         handleCFGViz(cfg);
 
-        if (checker.hasOption("flowtrdir")) {
-            typeRefinementVisualizer.visualize(root, trees, analysisResult);
+        if (checker.hasOption("printTypeRefinements")) {
+            typeRefinementVisualizer.visualize(checker, cfg, analysisResult);
         }
     }
 
@@ -1796,8 +1796,8 @@ public abstract class GenericAnnotatedTypeFactory<
     protected final TypeRefinementVisualizer typeRefinementVisualizer;
 
     private @Nullable TypeRefinementVisualizer createTypeRefinementVisualizer() {
-        if (checker.hasOption("flowtrdir")) {
-            return new TypeRefinementVisualizer(checker.getOption("flowtrdir"), getCheckerName());
+        if (checker.hasOption("printTypeRefinements")) {
+            return new TypeRefinementVisualizer();
         }
         return null;
     }
