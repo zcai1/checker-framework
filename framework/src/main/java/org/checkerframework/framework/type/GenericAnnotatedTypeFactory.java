@@ -1335,7 +1335,7 @@ public abstract class GenericAnnotatedTypeFactory<
         handleCFGViz(cfg);
 
         if (checker.hasOption("printTypeRefinements")) {
-            typeRefinementVisualizer.visualize(checker, cfg, analysisResult);
+            typeRefinementVisualizer.visualize(getCheckerName(), checker, cfg, analysisResult);
         }
     }
 

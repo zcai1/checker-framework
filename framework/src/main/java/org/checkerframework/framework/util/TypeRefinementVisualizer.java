@@ -17,6 +17,7 @@ import javax.tools.Diagnostic;
 public class TypeRefinementVisualizer {
 
     public void visualize(
+            String checkerName,
             SourceChecker checker,
             ControlFlowGraph cfg,
             AnalysisResult<? extends CFAbstractValue<?>, ? extends CFAbstractStore<?, ?>>
@@ -49,6 +50,7 @@ public class TypeRefinementVisualizer {
                                 Diagnostic.Kind.OTHER,
                                 "type.refinements",
                                 localVariableNode.getName(),
+                                checkerName,
                                 value.getAnnotations()));
             }
         }
